@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SessionUser } from "@/lib/auth";
-import { can } from "@/lib/rbac";
+import { can, canAnyWithRole } from "@/lib/rbac";
 import type { IconName } from "@/components/icons";
 import { Icon } from "@/components/icons";
 import { NavLinks, BottomNav, MobileHeader, LogoutButton } from "@/components/NavClient";
@@ -19,10 +19,11 @@ export function navFor(user: SessionUser): NavItem[] {
   if (can(user, "clients.read") && !isField) items.push({ href: "/clients", label: "Клиенты", icon: "clients" });
   if (can(user, "teams.read") && !isField) items.push({ href: "/teams", label: "Бригады", icon: "truck" });
   if (can(user, "inventory.read.all")) items.push({ href: "/inventory", label: "Склад", icon: "warehouse" });
-  if (can(user, "catalog.read") && !isField) items.push({ href: "/catalog", label: "Номенклатура", icon: "catalog", short: "Товары" });
+  if (can(user, "catalog.read") && !isField) items.push({ href: "/catalog", label: "Товары", icon: "catalog", short: "Товары" });
   if (can(user, "users.manage")) items.push({ href: "/employees", label: "Сотрудники", icon: "users", short: "Люди" });
   if (can(user, "directories.manage")) items.push({ href: "/directories", label: "Справочники", icon: "settings", short: "Настройки" });
-  if (can(user, "reports.view") || can(user, "reports.inventory")) items.push({ href: "/reports", label: "Отчёты", icon: "chart" });
+  if (canAnyWithRole(user, ["reports.view", "reports.inventory", "reports.stock", "reports.movements", "reports.works"])) items.push({ href: "/reports", label: "Отчёты", icon: "chart" });
+  if (canAnyWithRole(user, ["admin.backup", "admin.maintenance"])) items.push({ href: "/admin", label: "Администрирование", icon: "shield", short: "Админ" });
   items.push({ href: "/profile", label: "Моя учётная запись", icon: "user", short: "Профиль" });
   return items;
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/page-auth";
-import { can } from "@/lib/rbac";
+import { can, canWithRole } from "@/lib/rbac";
 import { dashboardSummary, employeeWorkload, inventoryConsumption, clientsReport, teamsStockSummary } from "@/lib/services/reports";
 import { listTeamsWithDetails } from "@/lib/services/teams";
 import { Card, PageHeader, Table, Td, Stat, inputCls } from "@/components/ui";
@@ -9,7 +9,7 @@ import { STATUS_LABELS, fmtQty } from "@/lib/labels";
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const user = await requireUser(["reports.view", "reports.inventory"]);
+  const user = await requireUser(["reports.view", "reports.inventory", "reports.stock", "reports.movements", "reports.works"]);
   const sp = await searchParams;
   const from = sp.from ? new Date(sp.from) : undefined;
   const to = sp.to ? new Date(sp.to + "T23:59:59") : undefined;
@@ -39,7 +39,28 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   }
   return (
     <div>
-      <PageHeader title="Отчёты" subtitle="Заявки · сотрудники · склад · клиенты" />
+      <PageHeader title="Отчёты" subtitle="Конфигурируемые отчёты с печатью и экспортом в CSV · сводки по заявкам, сотрудникам, складу и клиентам" />
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { href: "/reports/stock", icon: "📦", title: "Отчёт остатков", text: "Начальный остаток, приход, расход и конечный остаток по складам за период.", ok: canWithRole(user, "reports.stock") || canWithRole(user, "reports.inventory") },
+          { href: "/reports/movements", icon: "🔀", title: "Движение товаров", text: "Установка, поступление, перемещение, списание — по товарам, складам и периоду.", ok: canWithRole(user, "reports.movements") || canWithRole(user, "reports.inventory") },
+          { href: "/reports/works?mode=what", icon: "🧰", title: "Работы: что сделали", text: "Выполненные работы за период по видам, с поиском по наименованию.", ok: canWithRole(user, "reports.works") || canWithRole(user, "reports.view") },
+          { href: "/reports/works?mode=where", icon: "📍", title: "Работы: где сделали", text: "Работы по точкам клиентов, видам работ и бригадам.", ok: canWithRole(user, "reports.works") || canWithRole(user, "reports.view") },
+        ].filter((c) => c.ok).map((c) => (
+          <Link key={c.href} href={c.href} className="block transition hover:-translate-y-0.5">
+            <Card>
+              <div className="flex items-start gap-3">
+                <span className="text-2xl leading-none">{c.icon}</span>
+                <div>
+                  <div className="font-semibold text-slate-900">{c.title}</div>
+                  <p className="mt-0.5 text-sm text-slate-500">{c.text}</p>
+                  <div className="mt-2 text-xs text-indigo-600">настроить · печать · CSV →</div>
+                </div>
+              </div>
+            </Card>
+          </Link>
+        ))}
+      </div>
       <Card className="mb-4">
         <form className="grid gap-2 sm:grid-cols-4">
           <input type="date" name="from" defaultValue={sp.from ?? ""} className={inputCls} />

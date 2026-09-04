@@ -3,7 +3,7 @@ import { getStockByWarehouse } from "@/lib/services/inventory";
 import { getWarehouse } from "@/lib/services/warehouses";
 import { can } from "@/lib/rbac";
 
-/** Остатки склада (склад бригады → остатки бригады). */
+/** Остатки склада (склад-автомобиль показывает запас бригады). */
 export const GET = withAuth(async (_req, { user, params }) => {
   const id = parseId(params);
   if (!can(user, "inventory.read.all")) {

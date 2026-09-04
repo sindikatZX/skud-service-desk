@@ -1,4 +1,5 @@
 import { db } from "@/db";
+import { nextCode } from "@/lib/codes";
 import { users, teamMembers, teams, roles } from "@/db/schema";
 import { and, eq, isNull, asc } from "drizzle-orm";
 import { ok, withAuth, parseBody, conflict } from "@/lib/api";
@@ -39,6 +40,7 @@ export const POST = withAuth(async (req) => {
   const [u] = await db
     .insert(users)
     .values({
+      code: await nextCode("users"),
       email: b.email,
       passwordHash: await hashPassword(b.password),
       fullName: b.fullName,

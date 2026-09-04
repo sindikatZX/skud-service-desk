@@ -30,14 +30,17 @@ export const dateish = z
 
 export const quantity = z.coerce.number().positive("должно быть больше нуля").max(1_000_000);
 
-/** Код записи справочника: латиница/цифры/подчёркивание. */
+/**
+ * Код записи справочника в формате XX_ГГГГ_NNNNN. Не обязателен: если не передан
+ * (или занят/некорректен) — система генерирует следующий свободный.
+ */
 export const dictCode = z
   .string()
   .trim()
-  .min(1, "укажите код")
   .max(40)
-  .regex(/^[a-z][a-z0-9_]*$/i, "только латинские буквы, цифры и _, начиная с буквы")
-  .transform((v) => v.toLowerCase());
+  .optional()
+  .nullable()
+  .transform((v) => (v ? v.toUpperCase() : undefined));
 
 // ─────────────────────────── AUTH ───────────────────────────
 
@@ -113,9 +116,12 @@ export const catalogCreateSchema = z.object({
   isSerialized: z.boolean().optional().default(false),
   manufacturer: optionalText(120),
   description: optionalText(),
+  code: dictCode,
+  price: z.coerce.number().min(0).max(1e9).nullish(),
 });
 export const catalogUpdateSchema = z.object({
   sku: name(60).optional(),
+  price: z.coerce.number().min(0).max(1e9).nullish(),
   name: name(200).optional(),
   externalCode: optionalText(60),
   fullName: optionalText(500),
@@ -325,7 +331,7 @@ const dictBase = {
 };
 
 export const ticketTypeCreateSchema = z.object(dictBase);
-export const ticketTypeUpdateSchema = z.object({ ...dictBase, code: dictCode.optional(), name: name(120).optional() });
+export const ticketTypeUpdateSchema = z.object({ ...dictBase, name: name(120).optional() });
 
 export const priorityCreateSchema = z.object({
   ...dictBase,
@@ -387,7 +393,7 @@ export const importSchema = z.object({
 
 export const measureUnitCreateSchema = z.object({
   ...dictBase,
-  code: z.string().trim().min(1, "укажите код").max(20),
+  symbol: z.string().trim().min(1, "укажите обозначение").max(20),
 });
 export const measureUnitUpdateSchema = measureUnitCreateSchema.partial();
 
@@ -402,6 +408,83 @@ export const roleCreateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 export const roleUpdateSchema = roleCreateSchema.partial();
+
+// ─────────────────────────── ОТЧЁТЫ ───────────────────────────
+
+const csvList = z
+  .string()
+  .optional()
+  .transform((v) => (v ? v.split(",").map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n > 0) : []));
+const strList = z
+  .string()
+  .optional()
+  .transform((v) => (v ? v.split(",").map((x) => x.trim()).filter(Boolean) : []));
+const sortDir = z.enum(["asc", "desc"]).optional();
+const fmt = z.enum(["json", "csv"]).optional().default("json");
+
+/** Отчёт остатков: склад(ы) и дата, на которую считаются остатки (период — движение за период). */
+export const stockReportQuerySchema = z.object({
+  warehouseIds: csvList,
+  from: z.string().optional(),
+  to: z.string().optional(),
+  q: z.string().trim().max(200).optional(),
+  categoryId: z.coerce.number().int().positive().optional(),
+  onlyNonZero: z.string().optional().transform((v) => v !== "0"),
+  sort: z.enum(["name", "sku", "code", "category", "opening", "income", "outcome", "closing", "warehouse"]).optional(),
+  dir: sortDir,
+  format: fmt,
+});
+
+/** Движение товаров. */
+export const movementsReportQuerySchema = z.object({
+  types: strList,
+  from: z.string().optional(),
+  to: z.string().optional(),
+  itemIds: csvList,
+  q: z.string().trim().max(200).optional(),
+  warehouseIds: csvList,
+  sort: z.enum(["date", "type", "item", "sku", "quantity", "from", "to", "document", "actor"]).optional(),
+  dir: sortDir,
+  limit: z.coerce.number().int().min(1).max(20000).optional(),
+  format: fmt,
+});
+
+/** Отчёт по работам: что сделали / где сделали. */
+export const worksReportQuerySchema = z.object({
+  mode: z.enum(["what", "where"]).optional().default("what"),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  typeIds: csvList,
+  q: z.string().trim().max(200).optional(),
+  siteIds: csvList,
+  clientIds: csvList,
+  teamIds: csvList,
+  performerIds: csvList,
+  sort: z.enum(["date", "work", "quantity", "minutes", "ticket", "type", "client", "site", "team", "performer"]).optional(),
+  dir: sortDir,
+  limit: z.coerce.number().int().min(1).max(20000).optional(),
+  format: fmt,
+});
+
+// ─────────────────────────── АДМИНИСТРИРОВАНИЕ ───────────────────────────
+
+export const backupCreateSchema = z.object({ note: optionalText(300) });
+export const backupRestoreSchema = z.object({
+  /** Подтверждение: текст «ВОССТАНОВИТЬ». */
+  confirm: z.string().trim(),
+  /** Резервная копия перед восстановлением (по умолчанию да). */
+  backupFirst: z.boolean().optional().default(true),
+});
+export const resetSchema = z.object({
+  confirm: z.string().trim(),
+  backupFirst: z.boolean().optional().default(true),
+  /** Оставить сотрудников (учётные записи) и роли. */
+  keepUsers: z.boolean().optional().default(true),
+});
+export const maintenanceSchema = z.object({
+  action: z.enum(["vacuum", "analyze", "reindex", "check", "repair"]),
+  backupFirst: z.boolean().optional().default(true),
+});
 
 /** Тело запроса на удаление: подтверждение каскадного удаления зависимых записей. */
 export const deleteQuerySchema = z.object({

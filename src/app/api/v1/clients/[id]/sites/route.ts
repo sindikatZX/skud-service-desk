@@ -1,4 +1,5 @@
 import { db } from "@/db";
+import { nextCode } from "@/lib/codes";
 import { sites } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { ok, withAuth, parseBody, parseId, forbidden } from "@/lib/api";
@@ -12,6 +13,6 @@ export const GET = withAuth(async (_req, { user, params }) => {
 
 export const POST = withAuth(async (req, { params }) => {
   const b = await parseBody(req, siteCreateSchema);
-  const [s] = await db.insert(sites).values({ ...b, clientId: parseId(params) }).returning();
+  const [s] = await db.insert(sites).values({ ...b, clientId: parseId(params), code: await nextCode("sites") }).returning();
   return ok(s, { status: 201 });
 }, ["sites.manage"]);

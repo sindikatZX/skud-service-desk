@@ -5,6 +5,7 @@ import { listTicketTypes, listPriorities, listCategories, listMeasureUnits, list
 import { db } from "@/db";
 import { sites, catalogItems, clients } from "@/db/schema";
 import { sql } from "drizzle-orm";
+import { ImportExportAll } from "./ImportExportAll";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,11 @@ export default async function DirectoriesPage() {
   const sections = [
     { href: "/directories/ticket-types", title: "Типы работ", icon: "🛠", count: types.length, text: "Монтаж, ТО, ремонт, обследование — подставляются в форму заявки." },
     { href: "/directories/priorities", title: "Приоритеты и SLA", icon: "⏱", count: priorities.length, text: "Приоритеты заявок и срок исполнения в часах по умолчанию." },
-    { href: "/directories/categories", title: "Категории оборудования", icon: "📦", count: categories.length, text: "Группировка номенклатуры: камеры, контроллеры, кабель…" },
+    { href: "/directories/categories", title: "Категории товаров", icon: "📦", count: categories.length, text: "Группировка товаров: камеры, контроллеры, кабель…" },
     { href: "/directories/measure-units", title: "Единицы измерения", icon: "📏", count: units.length, text: "шт, м, комплект — используются в номенклатуре и работах." },
     { href: "/directories/works", title: "Справочник работ", icon: "🧰", count: works.length, text: "Виды работ и услуг с нормативом времени и ценой — для актов по заявкам." },
     { href: "/directories/warehouses", title: "Склады", icon: "🏭", count: whs.length, text: "Центральный, транзитный, склады-автомобили бригад и дополнительные склады." },
-    { href: "/catalog", title: "Справочник материалов (номенклатура)", icon: "🧱", count: itemsN, text: "Иерархический каталог оборудования и материалов, импорт из 1С." },
+    { href: "/catalog", title: "Справочник товаров (номенклатура)", icon: "🧱", count: itemsN, text: "Иерархический каталог оборудования и материалов с ценами, импорт из 1С." },
     { href: "/directories/sites", title: "Справочник объектов", icon: "📍", count: sitesN, text: "Все объекты обслуживания по клиентам, импорт из CSV." },
     { href: "/clients", title: "Клиенты", icon: "🏢", count: clientsN, text: "Контрагенты и их объекты." },
     { href: "/directories/roles", title: "Роли и права", icon: "🔑", count: roles.length, text: "Наборы прав и область видимости данных для сотрудников." },
@@ -52,7 +53,10 @@ export default async function DirectoriesPage() {
           </Link>
         ))}
       </div>
+      <ImportExportAll />
       <p className="mt-4 text-xs text-slate-500">
+        Коды всех справочников имеют единый формат <span className="font-mono">XX_ГГГГ_NNNNN</span> (префикс справочника, год, порядковый номер) и присваиваются системой.
+        При импорте CSV записи сопоставляются по коду: совпадение — перезапись существующей записи, иначе создаётся новая.
         Статусы заявок в справочники не вынесены намеренно: на них завязан автомат переходов
         (см. <span className="font-mono">docs/07-business-processes.md</span>), поэтому их набор задан в коде.
       </p>

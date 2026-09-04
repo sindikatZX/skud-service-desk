@@ -51,7 +51,7 @@ type Props = {
  * Универсальный экран справочника: добавление, переименование, включение/отключение
  * и удаление записей. Системные записи можно менять, но не удалять.
  */
-export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, codeHint, codeEditable = true, importEntity, extraColumns = [] }: Props) {
+export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, codeHint, importEntity }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
@@ -77,6 +77,7 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
     const fd = new FormData(form);
     const out: Record<string, unknown> = {};
     for (const [k, v] of fd.entries()) {
+      if (k === "code") continue; // код генерируется сервером
       const spec = [...extraFields].find((f) => f.name === k);
       if (v === "") { if (spec?.nullable) out[k] = null; continue; }
       out[k] = spec?.type === "number" || spec?.numeric || k === "sortOrder" ? Number(v) : String(v);
@@ -87,14 +88,13 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
 
   const rowFields = (row?: DictRow) => (
     <div className="grid gap-2 sm:grid-cols-2">
-      <Field label="Код" hint={codeHint ?? "латиницей, используется в интеграциях"}>
+      <Field label="Код" hint={codeHint ?? "формат XX_ГГГГ_NNNNN, присваивается системой и не меняется"}>
         <input
           name="code"
-          className={inputCls}
-          required
+          className={`${inputCls} font-mono`}
           defaultValue={row?.code ?? ""}
-          disabled={Boolean(row?.isSystem) || (row && !codeEditable)}
-          placeholder="repair"
+          disabled
+          placeholder="генерируется автоматически"
         />
       </Field>
       <Field label="Название">
@@ -135,7 +135,14 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
       action={!adding && <button className={btnCls} onClick={() => { setAdding(true); setEditing(null); }}>+ Добавить</button>}
     >
       {msg && <div className={`mb-3 rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}</div>}
-      {importEntity && <div className="mb-4"><CsvImport entity={importEntity} compact /></div>}
+      {importEntity && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <CsvImport entity={importEntity} compact />
+          <a href={`/api/v1/import/${importEntity}?export=1`} className={btnSecondaryCls} download>⇩ Экспорт CSV</a>
+          <a href={`/api/v1/import/${importEntity}?template=1`} className="text-xs text-indigo-600 hover:underline">шаблон CSV</a>
+          <span className="text-xs text-slate-500">При импорте записи сопоставляются по коду: совпал — перезаписывается, нет — создаётся.</span>
+        </div>
+      )}
 
       {adding && (
         <form

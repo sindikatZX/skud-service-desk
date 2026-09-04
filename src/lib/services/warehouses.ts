@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { warehouses, teams, vehicles, vehicleAssignments, stockBalances, equipmentUnits, stockReservations, type Warehouse } from "@/db/schema";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { conflict, notFound } from "@/lib/api";
+import { nextCode, resolveCode } from "@/lib/codes";
 
 /**
  * Мультисклад.
@@ -30,13 +31,15 @@ let ensured = 0;
  */
 export async function ensureWarehouses(force = false) {
   if (!force && Date.now() - ensured < 60_000) return;
-  await db
-    .insert(warehouses)
-    .values([
-      { code: "central", name: "Центральный склад", kind: "central", isSystem: true, sortOrder: 10 },
-      { code: "transit", name: "Транзитный склад", kind: "transit", isSystem: true, sortOrder: 20 },
-    ])
-    .onConflictDoNothing({ target: warehouses.code });
+  // Коды генерируются, поэтому единственность базовых складов определяем по виду,
+  // а не по коду: иначе каждый вызов заводил бы новый «Центральный склад».
+  for (const base of [
+    { kind: "central" as const, name: "Центральный склад", sortOrder: 10 },
+    { kind: "transit" as const, name: "Транзитный склад", sortOrder: 20 },
+  ]) {
+    const [exists] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.kind, base.kind)).limit(1);
+    if (!exists) await db.insert(warehouses).values({ ...base, code: await nextCode("warehouses"), isSystem: true });
+  }
 
   // Склад-автомобиль для каждой машины
   const missing = await db
@@ -48,7 +51,7 @@ export async function ensureWarehouses(force = false) {
     await db
       .insert(warehouses)
       .values({
-        code: `veh_${v.id}`,
+        code: await nextCode("warehouses"),
         name: vehicleWarehouseName(v),
         kind: "vehicle",
         vehicleId: v.id,
@@ -56,7 +59,8 @@ export async function ensureWarehouses(force = false) {
         isActive: v.isActive,
         sortOrder: 1000 + v.id,
       })
-      .onConflictDoNothing({ target: warehouses.code });
+      // Уникальность склада обеспечивает сама машина, а не код: коды теперь генерируются
+      .onConflictDoNothing({ target: warehouses.vehicleId });
   }
   // Название и активность склада следуют за автомобилем
   await db.execute(sql`
@@ -141,7 +145,7 @@ async function activeVehicleWarehouse(teamId: number): Promise<Warehouse | null>
 export async function getCentralWarehouse(): Promise<Warehouse> {
   const [w] = await db.select().from(warehouses).where(eq(warehouses.kind, "central")).orderBy(asc(warehouses.id)).limit(1);
   if (w) return w;
-  const [created] = await db.insert(warehouses).values({ code: "central", name: "Центральный склад", kind: "central", isSystem: true, sortOrder: 10 }).returning();
+  const [created] = await db.insert(warehouses).values({ code: await nextCode("warehouses"), name: "Центральный склад", kind: "central", isSystem: true, sortOrder: 10 }).returning();
   return created;
 }
 
@@ -239,8 +243,8 @@ export async function vehicleWarehouse(vehicleId: number): Promise<Warehouse> {
   if (!v) throw notFound("Автомобиль не найден");
   const [created] = await db
     .insert(warehouses)
-    .values({ code: `veh_${v.id}`, name: vehicleWarehouseName(v), kind: "vehicle", vehicleId: v.id, isSystem: true, isActive: v.isActive, sortOrder: 1000 + v.id })
-    .onConflictDoNothing({ target: warehouses.code })
+    .values({ code: await nextCode("warehouses"), name: vehicleWarehouseName(v), kind: "vehicle", vehicleId: v.id, isSystem: true, isActive: v.isActive, sortOrder: 1000 + v.id })
+    .onConflictDoNothing({ target: warehouses.vehicleId })
     .returning();
   return created ?? (await db.select().from(warehouses).where(eq(warehouses.vehicleId, vehicleId)))[0];
 }
@@ -280,12 +284,11 @@ export async function syncVehicleHolder(vehicleId: number) {
      where location_type = 'warehouse' and warehouse_id = ${van.id}`);
 }
 
-export async function createWarehouse(input: { code: string; name: string; kind?: "central" | "transit" | "vehicle" | "team" | "other"; address?: string | null; sortOrder?: number; isActive?: boolean }) {
-  const [exists] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.code, input.code));
-  if (exists) throw conflict(`Код склада «${input.code}» уже занят`);
+export async function createWarehouse(input: { code?: string | null; name: string; kind?: "central" | "transit" | "vehicle" | "team" | "other"; address?: string | null; sortOrder?: number; isActive?: boolean }) {
+  const code = await resolveCode("warehouses", input.code);
   // Склады-автомобили заводятся автоматически по автопарку, вручную — только обычные
   const kind = ["team", "central", "vehicle"].includes(input.kind ?? "") ? "other" : (input.kind ?? "other");
-  const [row] = await db.insert(warehouses).values({ ...input, kind, isSystem: false }).returning();
+  const [row] = await db.insert(warehouses).values({ ...input, code, kind, isSystem: false }).returning();
   return row;
 }
 
@@ -296,6 +299,7 @@ export async function updateWarehouse(id: number, patch: { code?: string; name?:
     if (exists) throw conflict(`Код склада «${patch.code}» уже занят`);
   }
   const set = { ...patch };
+  delete set.code; // код генерируется системой и не меняется
   // Вид системных складов (центральный, склад-автомобиль, старый склад бригады) не меняется
   if (["team", "central", "vehicle"].includes(w.kind)) delete set.kind;
   else if (["team", "central", "vehicle"].includes(set.kind ?? "")) set.kind = "other";

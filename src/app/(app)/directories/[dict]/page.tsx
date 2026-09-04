@@ -42,9 +42,9 @@ const DICTS: Record<
     load: () => listPriorities() as Promise<DictRow[]>,
   },
   categories: {
-    title: "Категории (папки номенклатуры)",
-    subtitle: "Иерархические группы номенклатуры, как в 1С: папка может быть вложена в другую",
-    usageLabel: "Позиций",
+    title: "Категории (папки товаров)",
+    subtitle: "Иерархические группы товаров, как в 1С: папка может быть вложена в другую",
+    usageLabel: "Товаров",
     importEntity: "categories",
     load: () => listCategories() as Promise<DictRow[]>,
     fieldsFor: (rows) => {
@@ -77,10 +77,10 @@ const DICTS: Record<
   },
   "measure-units": {
     title: "Единицы измерения",
-    subtitle: "Используются в номенклатуре и в актах выполненных работ",
-    usageLabel: "Позиций",
-    codeHint: "как показывается в интерфейсе: шт, м, компл",
+    subtitle: "Используются в справочнике товаров и в актах выполненных работ",
+    usageLabel: "Товаров",
     importEntity: "measure-units",
+    extraFields: [{ name: "symbol", label: "Обозначение", required: true, placeholder: "шт", hint: "как показывается в интерфейсе: шт, м, компл" }],
     load: () => listMeasureUnits() as Promise<DictRow[]>,
   },
 };
