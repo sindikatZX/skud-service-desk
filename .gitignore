@@ -1,0 +1,31 @@
+# Зависимости
+/node_modules
+/.pnp
+.pnp.*
+
+# Сборка Next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# Переменные окружения — в репозиторий попадает только .env.example
+.env
+.env.*
+!.env.example
+
+# Резервные копии БД (создаёт сервис backup из docker-compose)
+/backups/
+
+# Логи и отладка
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ОС и редакторы
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
