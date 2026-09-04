@@ -3,6 +3,7 @@ import { vehicles, vehicleAssignments, teams } from "@/db/schema";
 import { and, eq, isNull, asc } from "drizzle-orm";
 import { ok, withAuth, parseBody, conflict } from "@/lib/api";
 import { vehicleCreateSchema } from "@/lib/validators";
+import { vehicleWarehouse } from "@/lib/services/warehouses";
 
 export const GET = withAuth(async () => {
   const rows = await db
@@ -19,5 +20,7 @@ export const POST = withAuth(async (req) => {
   const [exists] = await db.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.plateNumber, b.plateNumber));
   if (exists) throw conflict(`Автомобиль с номером «${b.plateNumber}» уже заведён`);
   const [v] = await db.insert(vehicles).values({ ...b, year: b.year ?? null }).returning();
+  // Автомобиль — это склад: заводим его сразу, чтобы в машину можно было отгружать
+  await vehicleWarehouse(v.id);
   return ok(v, { status: 201 });
 }, ["vehicles.manage"]);

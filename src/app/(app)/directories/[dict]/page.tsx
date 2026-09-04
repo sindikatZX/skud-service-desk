@@ -66,11 +66,11 @@ const DICTS: Record<
   },
   warehouses: {
     title: "Склады",
-    subtitle: "Центральный, транзитный и склады бригад создаются автоматически; добавляйте дополнительные склады",
+    subtitle: "Центральный и транзитный склады, а также склады-автомобили создаются автоматически; здесь добавляют дополнительные",
     usageLabel: "Позиций/единиц",
     importEntity: "warehouses",
     extraFields: [
-      { name: "kind", label: "Вид склада", type: "select", options: Object.entries(WAREHOUSE_KIND_LABELS).filter(([k]) => k !== "team" && k !== "central").map(([value, label]) => ({ value, label })) },
+      { name: "kind", label: "Вид склада", type: "select", options: Object.entries(WAREHOUSE_KIND_LABELS).filter(([k]) => !["team", "central", "vehicle"].includes(k)).map(([value, label]) => ({ value, label })) },
       { name: "address", label: "Адрес" },
     ],
     load: () => listWarehousesDict() as unknown as Promise<DictRow[]>,

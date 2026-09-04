@@ -23,7 +23,7 @@ export default async function DirectoriesPage() {
     { href: "/directories/categories", title: "Категории оборудования", icon: "📦", count: categories.length, text: "Группировка номенклатуры: камеры, контроллеры, кабель…" },
     { href: "/directories/measure-units", title: "Единицы измерения", icon: "📏", count: units.length, text: "шт, м, комплект — используются в номенклатуре и работах." },
     { href: "/directories/works", title: "Справочник работ", icon: "🧰", count: works.length, text: "Виды работ и услуг с нормативом времени и ценой — для актов по заявкам." },
-    { href: "/directories/warehouses", title: "Склады", icon: "🏭", count: whs.length, text: "Центральный, транзитный, склады бригад и дополнительные склады." },
+    { href: "/directories/warehouses", title: "Склады", icon: "🏭", count: whs.length, text: "Центральный, транзитный, склады-автомобили бригад и дополнительные склады." },
     { href: "/catalog", title: "Справочник материалов (номенклатура)", icon: "🧱", count: itemsN, text: "Иерархический каталог оборудования и материалов, импорт из 1С." },
     { href: "/directories/sites", title: "Справочник объектов", icon: "📍", count: sitesN, text: "Все объекты обслуживания по клиентам, импорт из CSV." },
     { href: "/clients", title: "Клиенты", icon: "🏢", count: clientsN, text: "Контрагенты и их объекты." },

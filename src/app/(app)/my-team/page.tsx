@@ -32,7 +32,17 @@ export default async function MyTeamPage() {
             </Table>
           </Card>
         </div>
-        <div className="lg:col-span-2"><StockView stock={stock} title="Оборудование у бригады" /></div>
+        <div className="lg:col-span-2">
+          {stock.units.length || stock.balances.length ? (
+            <StockView stock={stock} title="Оборудование в машине бригады" />
+          ) : (
+            <Card title="Склад бригады">
+              <p className="text-sm text-slate-500">
+                Пусто. Запас бригады хранится в закреплённом за ней автомобиле — если машины нет, обратитесь к диспетчеру.
+              </p>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );

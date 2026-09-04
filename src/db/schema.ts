@@ -58,7 +58,13 @@ export const txTypeEnum = pgEnum("stock_tx_type", [
 export const stockDocTypeEnum = pgEnum("stock_doc_type", ["receipt", "transfer", "writeoff"]);
 
 /** Вид склада: центральный, транзитный, склад бригады (привязан к бригаде), прочий. */
-export const warehouseKindEnum = pgEnum("warehouse_kind", ["central", "transit", "team", "other"]);
+/**
+ * Вид склада. `vehicle` — склад-автомобиль бригады: материалы и оборудование
+ * физически лежат в машине, поэтому местом хранения выступает именно она.
+ * `team` — устаревший вид (склад был привязан к бригаде), остаётся ради
+ * совместимости со старыми данными и мигрируется в склад-автомобиль.
+ */
+export const warehouseKindEnum = pgEnum("warehouse_kind", ["central", "transit", "vehicle", "team", "other"]);
 
 export const reservationStatusEnum = pgEnum("reservation_status", ["active", "consumed", "cancelled"]);
 
@@ -250,6 +256,10 @@ export const warehouses = pgTable(
     code: text("code").notNull(),
     name: text("name").notNull(),
     kind: warehouseKindEnum("kind").notNull().default("other"),
+    /** Для склада-автомобиля: машина, в которой лежит запас. Бригада получает
+     *  доступ к этому складу через закреплённый за ней автомобиль. */
+    vehicleId: integer("vehicle_id").references(() => vehicles.id, { onDelete: "cascade" }),
+    /** Устаревшее: прямая привязка склада к бригаде (до перехода на склады-автомобили). */
     teamId: integer("team_id").references(() => teams.id, { onDelete: "cascade" }),
     address: text("address"),
     isSystem: boolean("is_system").notNull().default(false),
@@ -257,7 +267,7 @@ export const warehouses = pgTable(
     sortOrder: integer("sort_order").notNull().default(100),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("warehouses_code_idx").on(t.code), uniqueIndex("warehouses_team_idx").on(t.teamId)],
+  (t) => [uniqueIndex("warehouses_code_idx").on(t.code), uniqueIndex("warehouses_team_idx").on(t.teamId), uniqueIndex("warehouses_vehicle_idx").on(t.vehicleId)],
 );
 
 export const teamMembers = pgTable(

@@ -24,7 +24,8 @@ export const TX_LABELS: Record<string, string> = {
 };
 export const DOC_TYPE_LABELS: Record<string, string> = { receipt: "Поступление", transfer: "Перемещение", writeoff: "Списание" };
 export const DOC_PREFIX: Record<string, string> = { receipt: "ПН", transfer: "ПМ", writeoff: "СП" };
-export const WAREHOUSE_KIND_LABELS: Record<string, string> = { central: "Центральный", transit: "Транзитный", team: "Склад бригады", other: "Прочий" };
+// Склад бригады — это её автомобиль; вид «team» остался у складов, созданных до перехода.
+export const WAREHOUSE_KIND_LABELS: Record<string, string> = { central: "Центральный", transit: "Транзитный", vehicle: "Автомобиль бригады", team: "Склад бригады (устар.)", other: "Прочий" };
 export function fmtBytes(n: number) {
   if (n < 1024) return `${n} Б`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;

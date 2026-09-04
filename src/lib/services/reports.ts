@@ -13,6 +13,9 @@ import {
   clients,
   equipmentUnits,
   stockBalances,
+  warehouses,
+  vehicles,
+  vehicleAssignments,
 } from "@/db/schema";
 import { and, eq, sql, desc, asc, isNull, gte, lte } from "drizzle-orm";
 
@@ -168,16 +171,27 @@ export async function inventoryConsumption(f: { teamId?: number; clientId?: numb
 
 /** Сводка по остаткам всех бригад (что выдано и не установлено). */
 export async function teamsStockSummary() {
-  const qty = await db
+  // Запас бригады лежит в закреплённом за ней автомобиле, поэтому остатки
+  // считаем по складу-автомобилю, а не по «складу бригады».
+  const vans = await db
     .select({
-      teamId: stockBalances.teamId,
-      teamName: teams.name,
-      items: sql<number>`count(*) filter (where ${stockBalances.quantity} > 0)::int`,
+      teamId: vehicleAssignments.teamId,
+      warehouseId: warehouses.id,
+      vehicleName: sql<string>`${vehicles.model} || ' · ' || ${vehicles.plateNumber}`,
     })
+    .from(vehicleAssignments)
+    .innerJoin(vehicles, eq(vehicles.id, vehicleAssignments.vehicleId))
+    .innerJoin(warehouses, eq(warehouses.vehicleId, vehicles.id))
+    .where(isNull(vehicleAssignments.releasedAt));
+  const vanByTeam = new Map(vans.map((v) => [v.teamId, v]));
+
+  const qty = await db
+    .select({ warehouseId: stockBalances.warehouseId, items: sql<number>`count(*) filter (where ${stockBalances.quantity} > 0)::int` })
     .from(stockBalances)
-    .innerJoin(teams, eq(teams.id, stockBalances.teamId))
-    .where(eq(stockBalances.locationType, "team"))
-    .groupBy(stockBalances.teamId, teams.name);
+    .where(eq(stockBalances.locationType, "warehouse"))
+    .groupBy(stockBalances.warehouseId);
+  const qByWarehouse = new Map(qty.map((q) => [q.warehouseId, q.items]));
+
   const units = await db
     .select({
       teamId: equipmentUnits.teamId,
@@ -188,16 +202,22 @@ export async function teamsStockSummary() {
     .where(sql`${equipmentUnits.teamId} is not null and ${equipmentUnits.status} in ('at_team','reserved')`)
     .groupBy(equipmentUnits.teamId);
   const umap = new Map(units.map((u) => [u.teamId, u]));
+
   const allTeams = await db.select().from(teams).where(eq(teams.isActive, true));
-  const qmap = new Map(qty.map((q) => [q.teamId, q]));
-  return allTeams.map((t) => ({
-    teamId: t.id,
-    teamName: t.name,
-    materialItems: qmap.get(t.id)?.items ?? 0,
-    unitsAtTeam: umap.get(t.id)?.atTeam ?? 0,
-    unitsReserved: umap.get(t.id)?.reserved ?? 0,
-  }));
+  return allTeams.map((t) => {
+    const van = vanByTeam.get(t.id);
+    return {
+      teamId: t.id,
+      teamName: t.name,
+      vehicleName: van?.vehicleName ?? null,
+      warehouseId: van?.warehouseId ?? null,
+      materialItems: van ? (qByWarehouse.get(van.warehouseId) ?? 0) : 0,
+      unitsAtTeam: umap.get(t.id)?.atTeam ?? 0,
+      unitsReserved: umap.get(t.id)?.reserved ?? 0,
+    };
+  });
 }
+
 
 /** Отчёт по клиентам: заявки, установленное оборудование. */
 export async function clientsReport() {

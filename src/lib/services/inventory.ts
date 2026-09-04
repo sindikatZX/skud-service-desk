@@ -15,12 +15,13 @@ import {
   clients,
   sites,
   warehouses,
+  vehicleAssignments,
   type StockDocType,
 } from "@/db/schema";
-import { and, eq, desc, sql, inArray, gte, lte, or, ilike } from "drizzle-orm";
+import { and, eq, desc, sql, inArray, gte, lte, or, ilike, isNull } from "drizzle-orm";
 import { badRequest, conflict, notFound } from "@/lib/api";
 import { DOC_PREFIX } from "@/lib/labels";
-import { ensureWarehouses, getCentralWarehouse, locById, locOf, locTeam, locWarehouse, sameLoc, teamWarehouse, type Loc } from "@/lib/services/warehouses";
+import { ensureWarehouses, getCentralWarehouse, locById, locOf, locTeam, locWarehouse, sameLoc, teamWarehouse, teamWarehouseOrNull, type Loc } from "@/lib/services/warehouses";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Dbx = Tx | typeof db;
@@ -96,11 +97,35 @@ const locFields = (from: Loc | null, to: Loc | null): Partial<TxInsert> => ({
   toWarehouseId: to?.type === "warehouse" ? to.warehouseId : undefined,
 });
 
-/** Поля единицы для места хранения. */
-const unitPlace = (loc: Loc) =>
-  loc.type === "team"
-    ? { status: "at_team" as const, locationType: "team" as const, teamId: loc.teamId, warehouseId: null }
-    : { status: "in_warehouse" as const, locationType: "warehouse" as const, teamId: null, warehouseId: loc.warehouseId };
+/**
+ * Поля единицы для места хранения.
+ *
+ * Склад-автомобиль: единица лежит на складе машины, но числится «у бригады»,
+ * за которой машина закреплена сейчас. Поэтому статус и team_id зависят не от
+ * типа места, а от того, чей это склад — за ним и ходим в БД.
+ */
+async function unitPlace(tx: Tx, loc: Loc) {
+  if (loc.type === "team") return { status: "at_team" as const, locationType: "team" as const, teamId: loc.teamId, warehouseId: null };
+  const holder = await vanHolder(tx, loc.warehouseId);
+  return holder === undefined
+    ? { status: "in_warehouse" as const, locationType: "warehouse" as const, teamId: null, warehouseId: loc.warehouseId }
+    : { status: (holder === null ? "in_warehouse" : "at_team") as "in_warehouse" | "at_team", locationType: "warehouse" as const, teamId: holder, warehouseId: loc.warehouseId };
+}
+
+/**
+ * Для склада-автомобиля — id бригады, за которой закреплена машина (null, если
+ * машина свободна). Для обычного склада — undefined.
+ */
+async function vanHolder(tx: Dbx, warehouseId: number): Promise<number | null | undefined> {
+  const [w] = await tx.select({ kind: warehouses.kind, vehicleId: warehouses.vehicleId }).from(warehouses).where(eq(warehouses.id, warehouseId));
+  if (!w || w.kind !== "vehicle" || !w.vehicleId) return undefined;
+  const [a] = await tx
+    .select({ teamId: vehicleAssignments.teamId })
+    .from(vehicleAssignments)
+    .where(and(eq(vehicleAssignments.vehicleId, w.vehicleId), isNull(vehicleAssignments.releasedAt)))
+    .limit(1);
+  return a?.teamId ?? null;
+}
 
 // ─────────────── ДОКУМЕНТЫ ───────────────
 
@@ -200,7 +225,7 @@ export async function receiveDocument(input: {
           if (!sn) throw badRequest("Пустой серийный номер");
           const [unit] = await tx
             .insert(equipmentUnits)
-            .values({ catalogItemId: item.id, serialNumber: sn, macAddress: u.macAddress || null, ...unitPlace(toWh), receiptDocumentId: doc.id })
+            .values({ catalogItemId: item.id, serialNumber: sn, macAddress: u.macAddress || null, ...(await unitPlace(tx, toWh)), receiptDocumentId: doc.id })
             .returning();
           await logTx(tx, { type: "receive", catalogItemId: item.id, unitId: unit.id, quantity: "1", ...locFields(null, toWh), teamId: toWh.type === "team" ? toWh.teamId : undefined, documentId: doc.id, actorId: input.actorId, note: input.note ?? undefined });
           createdUnits.push(unit);
@@ -227,7 +252,7 @@ async function moveUnit(tx: Tx, unitId: number, from: Loc, to: Loc) {
   const cur = unitLoc(unit);
   if (!["in_warehouse", "at_team"].includes(unit.status) || !cur) throw conflict(`Единица ${unit.serialNumber} недоступна для перемещения (${unit.status})`);
   if (!sameLoc(cur, from)) throw conflict(`Единица ${unit.serialNumber} не находится на исходном складе`);
-  await tx.update(equipmentUnits).set({ ...unitPlace(to), updatedAt: new Date() }).where(eq(equipmentUnits.id, unit.id));
+  await tx.update(equipmentUnits).set({ ...(await unitPlace(tx, to)), updatedAt: new Date() }).where(eq(equipmentUnits.id, unit.id));
   return unit;
 }
 
@@ -373,6 +398,9 @@ export async function writeOff(input: { catalogItemId?: number; unitId?: number;
 export async function reserve(input: { ticketId: number; catalogItemId?: number; unitId?: number; quantity?: number; fromWarehouse?: boolean; warehouseId?: number; actorId: number; note?: string }) {
   await ensureWarehouses();
   const central = await getCentralWarehouse();
+  // Место хранения бригады резолвим до транзакции: teamWarehouse может создать склад машины
+  const ticketTeamId = (await db.select({ teamId: tickets.teamId }).from(tickets).where(eq(tickets.id, input.ticketId)))[0]?.teamId ?? null;
+  const teamLoc = ticketTeamId && !(input.fromWarehouse || input.warehouseId) ? locOf(await teamWarehouse(ticketTeamId)) : null;
   return db.transaction(async (tx) => {
     const ticket = await getTicket(tx, input.ticketId);
     if (["closed", "cancelled", "done"].includes(ticket.status)) throw conflict("Заявка завершена");
@@ -380,7 +408,7 @@ export async function reserve(input: { ticketId: number; catalogItemId?: number;
     if (input.fromWarehouse || input.warehouseId) loc = locWarehouse(input.warehouseId ?? central.id);
     else {
       if (!ticket.teamId) throw conflict("Заявке не назначена бригада — резерв из остатков бригады невозможен");
-      loc = locTeam(ticket.teamId);
+      loc = teamLoc!; // склад автомобиля бригады
     }
 
     if (input.unitId) {
@@ -409,7 +437,7 @@ export async function unreserve(input: { reservationId?: number; unitId?: number
       if (unit.status !== "reserved") throw conflict("Единица не зарезервирована");
       const back = unitLoc(unit) ?? locWarehouse((await getCentralWarehouse()).id);
       const ticket = unit.ticketId ? await getTicket(tx, unit.ticketId) : null;
-      await tx.update(equipmentUnits).set({ ...unitPlace(back), ticketId: null, updatedAt: new Date() }).where(eq(equipmentUnits.id, unit.id));
+      await tx.update(equipmentUnits).set({ ...(await unitPlace(tx, back)), ticketId: null, updatedAt: new Date() }).where(eq(equipmentUnits.id, unit.id));
       return logTx(tx, { type: "unreserve", catalogItemId: unit.catalogItemId, unitId: unit.id, quantity: "1", ...locFields(null, back), teamId: unit.teamId, ticketId: unit.ticketId, clientId: ticket?.clientId, siteId: ticket?.siteId, actorId: input.actorId });
     }
     const [r] = await tx.select().from(stockReservations).where(eq(stockReservations.id, Number(input.reservationId)));
@@ -428,17 +456,24 @@ export async function unreserve(input: { reservationId?: number; unitId?: number
  * Для серийной единицы — из статуса reserved (под эту заявку) или at_team (бригада заявки).
  */
 export async function install(input: { ticketId: number; catalogItemId?: number; unitId?: number; quantity?: number; actorId: number; note?: string }) {
+  await ensureWarehouses();
+  // Остатки бригады лежат в её автомобиле — склад резолвим до транзакции
+  const head = (await db.select({ teamId: tickets.teamId, status: tickets.status }).from(tickets).where(eq(tickets.id, input.ticketId)))[0];
+  if (!head) throw notFound("Заявка не найдена");
+  if (!head.teamId) throw conflict("Заявке не назначена бригада");
+  const teamLoc = locOf(await teamWarehouse(head.teamId));
+
   return db.transaction(async (tx) => {
     const ticket = await getTicket(tx, input.ticketId);
     if (["closed", "cancelled"].includes(ticket.status)) throw conflict("Заявка закрыта");
     if (!ticket.teamId) throw conflict("Заявке не назначена бригада");
-    const teamLoc = locTeam(ticket.teamId);
 
     if (input.unitId) {
       const unit = await getUnit(tx, input.unitId);
       const fromReserve = unit.status === "reserved" && unit.ticketId === ticket.id;
-      const fromTeam = unit.status === "at_team" && unit.teamId === ticket.teamId;
-      if (!fromReserve && !fromTeam) throw conflict("Единица не числится за бригадой заявки и не зарезервирована под неё");
+      const cur = unitLoc(unit);
+      const fromTeam = unit.status === "at_team" && !!cur && sameLoc(cur, teamLoc);
+      if (!fromReserve && !fromTeam) throw conflict("Единица не лежит в автомобиле бригады и не зарезервирована под эту заявку");
       const from = unitLoc(unit) ?? teamLoc;
       await tx
         .update(equipmentUnits)
@@ -484,8 +519,13 @@ export async function install(input: { ticketId: number; catalogItemId?: number;
  */
 export async function getStock(locationType: "warehouse" | "team", id = 0) {
   await ensureWarehouses();
-  const loc: Loc = locationType === "team" ? locTeam(id) : locWarehouse(id || (await getCentralWarehouse()).id);
-  return getStockAt(loc);
+  if (locationType === "team") {
+    // Остатки бригады — это содержимое её автомобиля; без машины остатков нет
+    const van = await teamWarehouseOrNull(id);
+    if (!van) return { balances: [], units: [], reservations: [] };
+    return getStockAt(locOf(van));
+  }
+  return getStockAt(locWarehouse(id || (await getCentralWarehouse()).id));
 }
 
 /** Остатки склада из справочника (склад бригады → остатки бригады). */
