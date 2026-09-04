@@ -15,7 +15,7 @@ export type SessionUser = {
   email: string;
   fullName: string;
   roleId: number;
-  /** Код роли — для отображения и совместимости; проверки прав идут через permissions. */
+  /** Системный ключ роли (admin, technician…) либо её код; проверки прав идут через permissions. */
   role: string;
   roleName: string;
   scope: RoleScope;
@@ -75,6 +75,7 @@ export async function loadSessionUser(userId: number): Promise<SessionUser | nul
       clientId: users.clientId,
       roleId: roles.id,
       roleCode: roles.code,
+      roleKey: roles.sysKey,
       roleName: roles.name,
       scope: roles.scope,
       isFieldStaff: roles.isFieldStaff,
@@ -97,7 +98,7 @@ export async function loadSessionUser(userId: number): Promise<SessionUser | nul
     email: row.email,
     fullName: row.fullName,
     roleId: row.roleId,
-    role: row.roleCode,
+    role: row.roleKey ?? row.roleCode,
     roleName: row.roleName,
     scope: row.scope,
     isFieldStaff: row.isFieldStaff,

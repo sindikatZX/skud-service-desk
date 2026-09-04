@@ -1,4 +1,5 @@
 import { db } from "@/db";
+import { nextCode } from "@/lib/codes";
 import { clients, sites, tickets } from "@/db/schema";
 import { eq, sql, asc } from "drizzle-orm";
 import { ok, withAuth, parseBody } from "@/lib/api";
@@ -20,6 +21,6 @@ export const GET = withAuth(async (_req, { user }) => {
 
 export const POST = withAuth(async (req) => {
   const b = await parseBody(req, clientCreateSchema);
-  const [c] = await db.insert(clients).values(b).returning();
+  const [c] = await db.insert(clients).values({ ...b, code: await nextCode("clients") }).returning();
   return ok(c, { status: 201 });
 }, ["clients.manage"]);

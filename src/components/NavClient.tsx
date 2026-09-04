@@ -117,7 +117,7 @@ export function MobileHeader({ homeHref, profile }: { homeHref: string; profile:
   const menu = menuAt === path;
   const setMenu = (v: boolean | ((prev: boolean) => boolean)) => setMenuAt((typeof v === "function" ? v(menu) : v) ? path : null);
   const segments = path.split("/").filter(Boolean);
-  const nested = segments.length > 1 || (segments.length === 1 && !["tickets", "clients", "teams", "inventory", "catalog", "employees", "directories", "reports", "my-team"].includes(segments[0]));
+  const nested = segments.length > 1 || (segments.length === 1 && !["tickets", "clients", "teams", "inventory", "catalog", "employees", "directories", "reports", "my-team", "admin"].includes(segments[0]));
   function back() {
     if (window.history.length > 1) router.back();
     else router.push(segments.length > 1 ? `/${segments[0]}` : homeHref);

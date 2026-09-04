@@ -9,15 +9,30 @@ import { fmtQty } from "@/lib/labels";
 
 export type CatNode = { id: number; code: string; name: string; parentId: number | null; isActive: boolean; count: number };
 export type CatItem = {
-  id: number; sku: string; name: string; externalCode: string | null; categoryId: number; unit: string; isSerialized: boolean; manufacturer: string | null; isActive: boolean;
+  id: number; code: string; sku: string; name: string; externalCode: string | null; categoryId: number; unit: string; isSerialized: boolean; manufacturer: string | null; isActive: boolean;
+  /** Цена приходит только пользователям с правом её видеть; остальным — null. */
+  price: string | null;
   qtyWarehouse: number; qtyTeams: number; unitsWarehouse: number; unitsTeam: number; unitsInstalled: number;
 };
 
 const ALL = -1;
 
 /** Дерево папок номенклатуры (как в 1С) + список позиций с галочками и массовыми действиями. */
-export function CatalogTree({ categories, items, units, manage, canImport, warehouses }: { categories: CatNode[]; items: CatItem[]; units: { code: string; name: string }[]; manage: boolean; canImport: boolean; warehouses: { id: number; name: string }[] }) {
+export function CatalogTree({ categories, items, units, manage, canImport, warehouses, showPrices = false, editPrices = false }: { categories: CatNode[]; items: CatItem[]; units: { code: string; name: string }[]; manage: boolean; canImport: boolean; warehouses: { id: number; name: string }[]; showPrices?: boolean; editPrices?: boolean }) {
   const router = useRouter();
+  const [priceEdit, setPriceEdit] = useState<{ id: number; value: string } | null>(null);
+  async function savePrice() {
+    if (!priceEdit) return;
+    setBusy(true); setMsg(null);
+    try {
+      const v = priceEdit.value.trim().replace(",", ".");
+      await api(`/catalog/${priceEdit.id}`, { method: "PATCH", json: { price: v === "" ? null : Number(v) } });
+      setMsg({ ok: true, text: v === "" ? "Цена очищена" : "Цена сохранена" });
+      setPriceEdit(null);
+      router.refresh();
+    } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } finally { setBusy(false); }
+  }
+  const fmtPrice = (p: string | null) => (p == null ? "—" : `${Number(p).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`);
   const [folder, setFolder] = useState<number>(ALL);
   const [onlyStock, setOnlyStock] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
@@ -42,7 +57,7 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
 
   const hasStock = (i: CatItem) => (i.isSerialized ? i.unitsWarehouse + i.unitsTeam > 0 : i.qtyWarehouse + i.qtyTeams > 0);
   const ql = q.trim().toLowerCase();
-  const list = items.filter((i) => (!inFolder || inFolder.has(i.categoryId)) && (!onlyStock || hasStock(i)) && (showInactive || i.isActive) && (!ql || `${i.name} ${i.sku} ${i.manufacturer ?? ""} ${i.externalCode ?? ""}`.toLowerCase().includes(ql)));
+  const list = items.filter((i) => (!inFolder || inFolder.has(i.categoryId)) && (!onlyStock || hasStock(i)) && (showInactive || i.isActive) && (!ql || `${i.name} ${i.sku} ${i.code} ${i.manufacturer ?? ""} ${i.externalCode ?? ""}`.toLowerCase().includes(ql)));
 
   const countIn = (id: number) => { const s = new Set(subtree(id)); return items.filter((i) => s.has(i.categoryId) && (!onlyStock || hasStock(i)) && (showInactive || i.isActive)).length; };
   const catName = (id: number) => categories.find((c) => c.id === id)?.name ?? "";
@@ -91,14 +106,13 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
   return (
     <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
       <Card className="h-fit">
-        <button type="button" onClick={() => setFolder(ALL)} className={`mb-1 flex w-full items-center gap-1.5 rounded-lg px-1 py-1 text-sm ${folder === ALL ? "bg-indigo-50 font-semibold text-indigo-700" : "hover:bg-slate-50"}`}>🗂 Вся номенклатура <span className="ml-auto text-[10px] text-slate-400">{items.filter((i) => (!onlyStock || hasStock(i)) && (showInactive || i.isActive)).length}</span></button>
+        <button type="button" onClick={() => setFolder(ALL)} className={`mb-1 flex w-full items-center gap-1.5 rounded-lg px-1 py-1 text-sm ${folder === ALL ? "bg-indigo-50 font-semibold text-indigo-700" : "hover:bg-slate-50"}`}>🗂 Все товары <span className="ml-auto text-[10px] text-slate-400">{items.filter((i) => (!onlyStock || hasStock(i)) && (showInactive || i.isActive)).length}</span></button>
         <Tree parentId={null} depth={0} />
         {manage && (
           <div className="mt-3 border-t border-slate-100 pt-2">
             <QuickForm collapsible compact title="+ Папка" endpoint="/directories/categories" submitLabel="Создать папку" variant="secondary"
               fields={[
                 { name: "name", label: "Название папки", required: true },
-                { name: "code", label: "Код (латиницей)", required: true, placeholder: "cable_utp" },
                 { name: "parentId", label: "Родительская папка", type: "select", numeric: true, options: [{ value: "", label: "— корень —" }, ...categories.map((c) => ({ value: c.id, label: path(c.id) }))], defaultValue: folder > 0 ? folder : "" },
               ]} />
           </div>
@@ -108,7 +122,7 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
       <div className="space-y-3">
         <Card>
           <div className="flex flex-wrap items-center gap-2">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск: название, артикул, код 1С…" className={`${inputCls} max-w-xs`} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск: название, артикул, код, код 1С…" className={`${inputCls} max-w-xs`} />
             <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" className="h-4 w-4" checked={onlyStock} onChange={(e) => setOnlyStock(e.target.checked)} />Только в наличии</label>
             <label className="flex items-center gap-1.5 text-sm text-slate-500"><input type="checkbox" className="h-4 w-4" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />Показывать отключённые</label>
             <div className="flex-1" />
@@ -126,6 +140,7 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
                   { name: "categoryId", label: "Папка", type: "select", required: true, numeric: true, options: categories.map((c) => ({ value: c.id, label: path(c.id) })), defaultValue: folder > 0 ? folder : categories[0]?.id },
                   { name: "unit", label: "Ед. изм.", type: "select", required: true, defaultValue: "шт", options: units.map((u) => ({ value: u.code, label: `${u.code} — ${u.name}` })) },
                   { name: "manufacturer", label: "Производитель" },
+                  ...(editPrices ? [{ name: "price", label: "Цена, ₽ (необязательно)", type: "number" as const, step: "0.01" }] : []),
                   { name: "isSerialized", label: "Серийный учёт (S/N)", type: "checkbox" },
                   { name: "description", label: "Описание", type: "textarea" },
                 ]} />
@@ -163,22 +178,38 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
               <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr className="border-b border-slate-200">
                   {manage && <th className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set([...sel, ...list.map((i) => i.id)]) : new Set([...sel].filter((id) => !list.some((i) => i.id === id))))} /></th>}
-                  <th className="px-3 py-2 font-medium">Позиция</th><th className="px-3 py-2 font-medium">Папка</th><th className="px-3 py-2 font-medium">Учёт</th><th className="px-3 py-2 font-medium">Склады</th><th className="px-3 py-2 font-medium">У бригад</th><th className="px-3 py-2 font-medium">Установлено</th>
+                  <th className="px-3 py-2 font-medium">Товар</th><th className="px-3 py-2 font-medium">Папка</th><th className="px-3 py-2 font-medium">Учёт</th>{showPrices && <th className="px-3 py-2 font-medium">Цена</th>}<th className="px-3 py-2 font-medium">Склады</th><th className="px-3 py-2 font-medium">У бригад</th><th className="px-3 py-2 font-medium">Установлено</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {list.map((i) => (
                   <tr key={i.id} className={`${sel.has(i.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"} ${!i.isActive ? "opacity-50" : ""}`}>
                     {manage && <td className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={sel.has(i.id)} onChange={() => toggle(i.id)} /></td>}
-                    <td className="px-3 py-2"><div className="font-medium">{i.name}</div><div className="text-xs text-slate-500">{i.sku}{i.externalCode ? ` · 1С: ${i.externalCode}` : ""}{i.manufacturer ? ` · ${i.manufacturer}` : ""}</div></td>
+                    <td className="px-3 py-2"><div className="font-medium">{i.name}</div><div className="text-xs text-slate-500"><span className="font-mono">{i.code}</span> · {i.sku}{i.externalCode ? ` · 1С: ${i.externalCode}` : ""}{i.manufacturer ? ` · ${i.manufacturer}` : ""}</div></td>
                     <td className="px-3 py-2 text-xs"><button className="text-left text-indigo-600 hover:underline" onClick={() => setFolder(i.categoryId)}>{catName(i.categoryId)}</button></td>
                     <td className="px-3 py-2">{i.isSerialized ? <Badge tone="indigo">серийный</Badge> : <Badge>кол-во, {i.unit}</Badge>}</td>
+                    {showPrices && (
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {priceEdit?.id === i.id ? (
+                          <span className="flex items-center gap-1">
+                            <input autoFocus type="number" step="0.01" min="0" className={`${inputCls} min-h-[2rem] w-28 py-1 text-xs`} value={priceEdit.value} onChange={(e) => setPriceEdit({ id: i.id, value: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") savePrice(); if (e.key === "Escape") setPriceEdit(null); }} />
+                            <button className="text-xs text-indigo-600 hover:underline" disabled={busy} onClick={savePrice}>ок</button>
+                            <button className="text-xs text-slate-400 hover:underline" onClick={() => setPriceEdit(null)}>✕</button>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <span className={i.price == null ? "text-slate-400" : "tabular-nums"}>{fmtPrice(i.price)}</span>
+                            {editPrices && <button className="text-xs text-indigo-600 hover:underline" title="Изменить цену" onClick={() => setPriceEdit({ id: i.id, value: i.price ?? "" })}>изм.</button>}
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-3 py-2">{i.isSerialized ? i.unitsWarehouse : `${fmtQty(i.qtyWarehouse)} ${i.unit}`}</td>
                     <td className="px-3 py-2">{i.isSerialized ? i.unitsTeam : `${fmtQty(i.qtyTeams)} ${i.unit}`}</td>
                     <td className="px-3 py-2">{i.isSerialized ? i.unitsInstalled : "—"}</td>
                   </tr>
                 ))}
-                {!list.length && <tr><td colSpan={manage ? 7 : 6} className="px-3 py-8 text-center text-slate-400">{onlyStock ? "В этой папке нет позиций в наличии. Снимите флажок «Только в наличии»." : "Нет позиций"}</td></tr>}
+                {!list.length && <tr><td colSpan={(manage ? 7 : 6) + (showPrices ? 1 : 0)} className="px-3 py-8 text-center text-slate-400">{onlyStock ? "В этой папке нет позиций в наличии. Снимите флажок «Только в наличии»." : "Нет позиций"}</td></tr>}
               </tbody>
             </table>
           </div>

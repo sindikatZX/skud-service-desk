@@ -14,7 +14,7 @@ export default async function EmployeesPage() {
     db
       .select({
         id: users.id, email: users.email, fullName: users.fullName, phone: users.phone,
-        roleName: roles.name, roleCode: roles.code, isActive: users.isActive, teamName: teams.name, clientName: clients.name,
+        roleName: roles.name, roleCode: roles.sysKey, isActive: users.isActive, teamName: teams.name, clientName: clients.name,
       })
       .from(users)
       .innerJoin(roles, eq(roles.id, users.roleId))

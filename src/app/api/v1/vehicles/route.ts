@@ -1,4 +1,5 @@
 import { db } from "@/db";
+import { nextCode } from "@/lib/codes";
 import { vehicles, vehicleAssignments, teams } from "@/db/schema";
 import { and, eq, isNull, asc } from "drizzle-orm";
 import { ok, withAuth, parseBody, conflict } from "@/lib/api";
@@ -18,6 +19,6 @@ export const POST = withAuth(async (req) => {
   const b = await parseBody(req, vehicleCreateSchema);
   const [exists] = await db.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.plateNumber, b.plateNumber));
   if (exists) throw conflict(`Автомобиль с номером «${b.plateNumber}» уже заведён`);
-  const [v] = await db.insert(vehicles).values({ ...b, year: b.year ?? null }).returning();
+  const [v] = await db.insert(vehicles).values({ ...b, year: b.year ?? null, code: await nextCode("vehicles") }).returning();
   return ok(v, { status: 201 });
 }, ["vehicles.manage"]);

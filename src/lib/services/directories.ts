@@ -15,6 +15,7 @@ import { listWarehousesWithUsage, createWarehouse, updateWarehouse, deleteWareho
 import { asc, eq, sql } from "drizzle-orm";
 import { conflict, notFound } from "@/lib/api";
 import type { Permission } from "@/lib/rbac";
+import { resolveCode } from "@/lib/codes";
 
 /**
  * Справочники: типы работ, приоритеты, категории номенклатуры, единицы измерения и роли.
@@ -72,15 +73,15 @@ export async function listWorkCatalog() {
   return rows.map((r) => ({ ...r, usedBy: used.get(r.name) ?? 0 }));
 }
 
-export async function createWorkCatalog(input: { code: string; name: string; unit?: string; defaultMinutes?: number | null; price?: number | null; sortOrder?: number; isActive?: boolean }) {
-  await ensureCodeFree(workCatalog, input.code);
-  const [row] = await db.insert(workCatalog).values({ ...input, unit: input.unit || "шт", price: input.price != null ? String(input.price) : null, isSystem: false }).returning();
+export async function createWorkCatalog(input: { code?: string | null; name: string; unit?: string; defaultMinutes?: number | null; price?: number | null; sortOrder?: number; isActive?: boolean }) {
+  const code = await resolveCode("work_catalog", input.code);
+  const [row] = await db.insert(workCatalog).values({ ...input, code, unit: input.unit || "шт", price: input.price != null ? String(input.price) : null, isSystem: false }).returning();
   return row;
 }
 
 export async function updateWorkCatalog(id: number, patch: { code?: string; name?: string; unit?: string; defaultMinutes?: number | null; price?: number | null; sortOrder?: number; isActive?: boolean }) {
-  if (patch.code) await ensureCodeFree(workCatalog, patch.code, id);
-  const { price, ...rest } = patch;
+  const { price, code: _code, ...rest } = patch;
+  void _code;
   const [row] = await db.update(workCatalog).set({ ...rest, ...(price !== undefined ? { price: price != null ? String(price) : null } : {}) }).where(eq(workCatalog.id, id)).returning();
   if (!row) throw notFound("Работа не найдена");
   return row;
@@ -100,9 +101,11 @@ export const createWarehouseDict = createWarehouse;
 export const updateWarehouseDict = updateWarehouse;
 export const deleteWarehouseDict = deleteWarehouse;
 
-async function ensureCodeFree(table: typeof ticketTypes | typeof catalogCategories | typeof measureUnits | typeof ticketPriorities | typeof roles | typeof workCatalog, code: string, exceptId?: number) {
-  const rows = await db.select({ id: table.id }).from(table).where(eq(table.code, code));
-  if (rows.some((r) => r.id !== exceptId)) throw conflict(`Код «${code}» уже занят в этом справочнике`);
+/** Код справочника генерируется системой (XX_ГГГГ_NNNNN) и не редактируется. */
+function dropCode<T extends { code?: string }>(patch: T): Omit<T, "code"> {
+  const { code: _code, ...rest } = patch;
+  void _code;
+  return rest;
 }
 
 // ─────────────────────────── ТИПЫ РАБОТ ───────────────────────────
@@ -119,15 +122,14 @@ export async function listTicketTypes() {
   return rows.map((r) => ({ ...r, usedBy: used.get(r.id) ?? 0 }));
 }
 
-export async function createTicketType(input: { code: string; name: string; sortOrder?: number; isActive?: boolean }) {
-  await ensureCodeFree(ticketTypes, input.code);
-  const [row] = await db.insert(ticketTypes).values({ ...input, isSystem: false }).returning();
+export async function createTicketType(input: { code?: string | null; name: string; sortOrder?: number; isActive?: boolean }) {
+  const code = await resolveCode("ticket_types", input.code);
+  const [row] = await db.insert(ticketTypes).values({ ...input, code, isSystem: false }).returning();
   return row;
 }
 
 export async function updateTicketType(id: number, patch: { code?: string; name?: string; sortOrder?: number; isActive?: boolean }) {
-  if (patch.code) await ensureCodeFree(ticketTypes, patch.code, id);
-  const [row] = await db.update(ticketTypes).set(patch).where(eq(ticketTypes.id, id)).returning();
+  const [row] = await db.update(ticketTypes).set(dropCode(patch)).where(eq(ticketTypes.id, id)).returning();
   if (!row) throw notFound("Тип работ не найден");
   return row;
 }
@@ -156,15 +158,15 @@ export async function listPriorities() {
 }
 
 export async function createPriority(input: {
-  code: string;
+  code?: string | null;
   name: string;
   slaHours?: number | null;
   colorClass?: string;
   sortOrder?: number;
   isActive?: boolean;
 }) {
-  await ensureCodeFree(ticketPriorities, input.code);
-  const [row] = await db.insert(ticketPriorities).values({ ...input, isSystem: false }).returning();
+  const code = await resolveCode("ticket_priorities", input.code);
+  const [row] = await db.insert(ticketPriorities).values({ ...input, code, isSystem: false }).returning();
   return row;
 }
 
@@ -172,8 +174,7 @@ export async function updatePriority(
   id: number,
   patch: { code?: string; name?: string; slaHours?: number | null; colorClass?: string; sortOrder?: number; isActive?: boolean },
 ) {
-  if (patch.code) await ensureCodeFree(ticketPriorities, patch.code, id);
-  const [row] = await db.update(ticketPriorities).set(patch).where(eq(ticketPriorities.id, id)).returning();
+  const [row] = await db.update(ticketPriorities).set(dropCode(patch)).where(eq(ticketPriorities.id, id)).returning();
   if (!row) throw notFound("Приоритет не найден");
   return row;
 }
@@ -201,14 +202,13 @@ export async function listCategories() {
   return rows.map((r) => ({ ...r, usedBy: used.get(r.id) ?? 0 }));
 }
 
-export async function createCategory(input: { code: string; name: string; parentId?: number | null; sortOrder?: number; isActive?: boolean }) {
-  await ensureCodeFree(catalogCategories, input.code);
-  const [row] = await db.insert(catalogCategories).values({ ...input, parentId: input.parentId ?? null, isSystem: false }).returning();
+export async function createCategory(input: { code?: string | null; name: string; parentId?: number | null; sortOrder?: number; isActive?: boolean }) {
+  const code = await resolveCode("catalog_categories", input.code);
+  const [row] = await db.insert(catalogCategories).values({ ...input, code, parentId: input.parentId ?? null, isSystem: false }).returning();
   return row;
 }
 
 export async function updateCategory(id: number, patch: { code?: string; name?: string; parentId?: number | null; sortOrder?: number; isActive?: boolean }) {
-  if (patch.code) await ensureCodeFree(catalogCategories, patch.code, id);
   if (patch.parentId) {
     // защита от цикла: родитель не может быть потомком редактируемой папки
     if (patch.parentId === id) throw conflict("Папка не может быть вложена сама в себя");
@@ -221,7 +221,7 @@ export async function updateCategory(id: number, patch: { code?: string; name?: 
       cur = all.find((c) => c.id === cur)?.parentId ?? null;
     }
   }
-  const [row] = await db.update(catalogCategories).set(patch).where(eq(catalogCategories.id, id)).returning();
+  const [row] = await db.update(catalogCategories).set(dropCode(patch)).where(eq(catalogCategories.id, id)).returning();
   if (!row) throw notFound("Категория не найдена");
   return row;
 }
@@ -248,19 +248,36 @@ export async function listMeasureUnits() {
       .groupBy(catalogItems.unit)
       .then(usageCounts),
   ]);
-  return rows.map((r) => ({ ...r, usedBy: used.get(r.code) ?? 0 }));
+  return rows.map((r) => ({ ...r, usedBy: used.get(r.symbol) ?? 0 }));
 }
 
-export async function createMeasureUnit(input: { code: string; name: string; sortOrder?: number; isActive?: boolean }) {
-  await ensureCodeFree(measureUnits, input.code);
-  const [row] = await db.insert(measureUnits).values({ ...input, isSystem: false }).returning();
+async function ensureSymbolFree(symbol: string, exceptId?: number) {
+  const rows = await db.select({ id: measureUnits.id }).from(measureUnits).where(eq(measureUnits.symbol, symbol));
+  if (rows.some((r) => r.id !== exceptId)) throw conflict(`Обозначение «${symbol}» уже используется другой единицей измерения`);
+}
+
+export async function createMeasureUnit(input: { code?: string | null; symbol: string; name: string; sortOrder?: number; isActive?: boolean }) {
+  const symbol = input.symbol.trim();
+  await ensureSymbolFree(symbol);
+  const code = await resolveCode("measure_units", input.code);
+  const [row] = await db.insert(measureUnits).values({ ...input, symbol, code, isSystem: false }).returning();
   return row;
 }
 
-export async function updateMeasureUnit(id: number, patch: { code?: string; name?: string; sortOrder?: number; isActive?: boolean }) {
-  if (patch.code) await ensureCodeFree(measureUnits, patch.code, id);
-  const [row] = await db.update(measureUnits).set(patch).where(eq(measureUnits.id, id)).returning();
-  if (!row) throw notFound("Единица измерения не найдена");
+export async function updateMeasureUnit(id: number, patch: { code?: string; symbol?: string; name?: string; sortOrder?: number; isActive?: boolean }) {
+  const [existing] = await db.select().from(measureUnits).where(eq(measureUnits.id, id));
+  if (!existing) throw notFound("Единица измерения не найдена");
+  const set = dropCode(patch);
+  if (set.symbol !== undefined) {
+    set.symbol = set.symbol.trim();
+    if (set.symbol !== existing.symbol) {
+      await ensureSymbolFree(set.symbol, id);
+      // Обозначение хранится в номенклатуре и работах как текст — переименовываем везде.
+      await db.update(catalogItems).set({ unit: set.symbol }).where(eq(catalogItems.unit, existing.symbol));
+      await db.update(workCatalog).set({ unit: set.symbol }).where(eq(workCatalog.unit, existing.symbol));
+    }
+  }
+  const [row] = await db.update(measureUnits).set(set).where(eq(measureUnits.id, id)).returning();
   return row;
 }
 
@@ -268,15 +285,15 @@ export async function deleteMeasureUnit(id: number) {
   const [row] = await db.select().from(measureUnits).where(eq(measureUnits.id, id));
   if (!row) throw notFound("Единица измерения не найдена");
   if (row.isSystem) throw conflict(SYSTEM_LOCKED);
-  const [used] = await db.select({ n: sql<number>`count(*)::int` }).from(catalogItems).where(eq(catalogItems.unit, row.code));
-  if (used.n > 0) throw conflict(`Единицу используют ${used.n} позиций номенклатуры.`);
+  const [used] = await db.select({ n: sql<number>`count(*)::int` }).from(catalogItems).where(eq(catalogItems.unit, row.symbol));
+  if (used.n > 0) throw conflict(`Единицу используют ${used.n} товаров.`);
   await db.delete(measureUnits).where(eq(measureUnits.id, id));
 }
 
-/** Проверка, что код единицы измерения существует в справочнике. */
-export async function assertMeasureUnitExists(code: string) {
-  const [row] = await db.select({ id: measureUnits.id }).from(measureUnits).where(eq(measureUnits.code, code));
-  if (!row) throw conflict(`Единица измерения «${code}» отсутствует в справочнике`);
+/** Проверка, что обозначение единицы измерения существует в справочнике. */
+export async function assertMeasureUnitExists(symbol: string) {
+  const [row] = await db.select({ id: measureUnits.id }).from(measureUnits).where(eq(measureUnits.symbol, symbol));
+  if (!row) throw conflict(`Единица измерения «${symbol}» отсутствует в справочнике`);
 }
 
 // ─────────────────────────── РОЛИ ───────────────────────────
@@ -294,7 +311,7 @@ export async function listRoles() {
 }
 
 export async function createRole(input: {
-  code: string;
+  code?: string | null;
   name: string;
   description?: string | null;
   scope?: "all" | "team" | "client";
@@ -303,11 +320,11 @@ export async function createRole(input: {
   sortOrder?: number;
   isActive?: boolean;
 }) {
-  await ensureCodeFree(roles, input.code);
+  const code = await resolveCode("roles", input.code);
   const [row] = await db
     .insert(roles)
     .values({
-      code: input.code,
+      code,
       name: input.name,
       description: input.description ?? null,
       scope: input.scope ?? "all",
@@ -336,10 +353,8 @@ export async function updateRole(
 ) {
   const [existing] = await db.select().from(roles).where(eq(roles.id, id));
   if (!existing) throw notFound("Роль не найдена");
-  if (patch.code) await ensureCodeFree(roles, patch.code, id);
-  // У системной роли код неизменен: на него опирается первичная настройка.
-  const set = { ...patch, permissions: patch.permissions as Permission[] | undefined };
-  if (existing.isSystem) delete set.code;
+  // Код генерируется системой и не редактируется.
+  const set = { ...dropCode(patch), permissions: patch.permissions as Permission[] | undefined };
 
   // Нельзя оставить систему без роли, управляющей пользователями.
   if (patch.permissions && existing.permissions.includes("users.manage") && !patch.permissions.includes("users.manage")) {

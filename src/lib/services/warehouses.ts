@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { warehouses, teams, stockBalances, equipmentUnits, stockReservations, type Warehouse } from "@/db/schema";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { conflict, notFound } from "@/lib/api";
+import { nextCode, resolveCode } from "@/lib/codes";
 
 /**
  * Мультисклад. Место хранения (Loc) — либо склад (warehouseId), либо бригада (teamId).
@@ -23,13 +24,9 @@ let ensured = 0;
  */
 export async function ensureWarehouses(force = false) {
   if (!force && Date.now() - ensured < 60_000) return;
-  await db
-    .insert(warehouses)
-    .values([
-      { code: "central", name: "Центральный склад", kind: "central", isSystem: true, sortOrder: 10 },
-      { code: "transit", name: "Транзитный склад", kind: "transit", isSystem: true, sortOrder: 20 },
-    ])
-    .onConflictDoNothing({ target: warehouses.code });
+  const kinds = new Set((await db.select({ kind: warehouses.kind }).from(warehouses)).map((w) => w.kind));
+  if (!kinds.has("central")) await db.insert(warehouses).values({ code: await nextCode("warehouses"), name: "Центральный склад", kind: "central", isSystem: true, sortOrder: 10 });
+  if (!kinds.has("transit")) await db.insert(warehouses).values({ code: await nextCode("warehouses"), name: "Транзитный склад", kind: "transit", isSystem: true, sortOrder: 20 });
 
   // Склады бригад
   const missing = await db
@@ -40,8 +37,8 @@ export async function ensureWarehouses(force = false) {
   for (const t of missing) {
     await db
       .insert(warehouses)
-      .values({ code: `team_${t.id}`, name: t.name, kind: "team", teamId: t.id, isSystem: true, isActive: t.isActive, sortOrder: 1000 + t.id })
-      .onConflictDoNothing({ target: warehouses.code });
+      .values({ code: await nextCode("warehouses"), name: t.name, kind: "team", teamId: t.id, isSystem: true, isActive: t.isActive, sortOrder: 1000 + t.id })
+      .onConflictDoNothing({ target: warehouses.teamId });
   }
   // Имя склада бригады следует за именем бригады
   await db.execute(sql`update warehouses w set name = t.name, is_active = t.is_active from teams t where w.team_id = t.id and w.kind = 'team' and (w.name <> t.name or w.is_active <> t.is_active)`);
@@ -56,7 +53,7 @@ export async function ensureWarehouses(force = false) {
 export async function getCentralWarehouse(): Promise<Warehouse> {
   const [w] = await db.select().from(warehouses).where(eq(warehouses.kind, "central")).orderBy(asc(warehouses.id)).limit(1);
   if (w) return w;
-  const [created] = await db.insert(warehouses).values({ code: "central", name: "Центральный склад", kind: "central", isSystem: true, sortOrder: 10 }).returning();
+  const [created] = await db.insert(warehouses).values({ code: await nextCode("warehouses"), name: "Центральный склад", kind: "central", isSystem: true, sortOrder: 10 }).returning();
   return created;
 }
 
@@ -125,17 +122,16 @@ export async function teamWarehouse(teamId: number) {
   if (!t) throw notFound("Бригада не найдена");
   const [created] = await db
     .insert(warehouses)
-    .values({ code: `team_${t.id}`, name: t.name, kind: "team", teamId: t.id, isSystem: true, sortOrder: 1000 + t.id })
-    .onConflictDoNothing({ target: warehouses.code })
+    .values({ code: await nextCode("warehouses"), name: t.name, kind: "team", teamId: t.id, isSystem: true, sortOrder: 1000 + t.id })
+    .onConflictDoNothing({ target: warehouses.teamId })
     .returning();
   return created ?? (await db.select().from(warehouses).where(eq(warehouses.teamId, teamId)))[0];
 }
 
-export async function createWarehouse(input: { code: string; name: string; kind?: "central" | "transit" | "team" | "other"; address?: string | null; sortOrder?: number; isActive?: boolean }) {
-  const [exists] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.code, input.code));
-  if (exists) throw conflict(`Код склада «${input.code}» уже занят`);
+export async function createWarehouse(input: { code?: string | null; name: string; kind?: "central" | "transit" | "team" | "other"; address?: string | null; sortOrder?: number; isActive?: boolean }) {
+  const code = await resolveCode("warehouses", input.code);
   const kind = input.kind === "team" || input.kind === "central" ? "other" : (input.kind ?? "other");
-  const [row] = await db.insert(warehouses).values({ ...input, kind, isSystem: false }).returning();
+  const [row] = await db.insert(warehouses).values({ ...input, code, kind, isSystem: false }).returning();
   return row;
 }
 
@@ -146,6 +142,7 @@ export async function updateWarehouse(id: number, patch: { code?: string; name?:
     if (exists) throw conflict(`Код склада «${patch.code}» уже занят`);
   }
   const set = { ...patch };
+  delete set.code; // код генерируется системой и не меняется
   if (w.kind === "team" || w.kind === "central") delete set.kind; // вид системных складов не меняется
   else if (set.kind === "team" || set.kind === "central") set.kind = "other";
   const [row] = await db.update(warehouses).set(set).where(eq(warehouses.id, id)).returning();

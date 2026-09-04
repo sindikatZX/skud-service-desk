@@ -47,7 +47,6 @@ export function RoleManager({ roles }: { roles: RoleRow[] }) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const body = {
-      code: String(fd.get("code") ?? ""),
       name: String(fd.get("name") ?? ""),
       description: String(fd.get("description") ?? ""),
       scope: String(fd.get("scope") ?? "all"),
@@ -59,9 +58,7 @@ export function RoleManager({ roles }: { roles: RoleRow[] }) {
     if (role === "new") {
       run(() => api("/directories/roles", { method: "POST", json: body }), "Роль создана");
     } else {
-      // Код системной роли менять нельзя — сервер его игнорирует, не отправляем.
-      const patch = role.isSystem ? { ...body, code: undefined } : body;
-      run(() => api(`/directories/roles/${role.id}`, { method: "PATCH", json: patch }), "Роль обновлена");
+      run(() => api(`/directories/roles/${role.id}`, { method: "PATCH", json: body }), "Роль обновлена");
     }
   }
 
@@ -70,8 +67,8 @@ export function RoleManager({ roles }: { roles: RoleRow[] }) {
     return (
       <form onSubmit={(e) => submit(e, role)} className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Код" hint={r?.isSystem ? "у системной роли код неизменен" : "латиницей, напр. senior_tech"}>
-            <input name="code" className={inputCls} required defaultValue={r?.code ?? ""} disabled={r?.isSystem} placeholder="senior_tech" />
+          <Field label="Код" hint="формат RL_ГГГГ_NNNNN, присваивается системой">
+            <input name="code" className={`${inputCls} font-mono`} defaultValue={r?.code ?? ""} disabled placeholder="генерируется автоматически" />
           </Field>
           <Field label="Название">
             <input name="name" className={inputCls} required defaultValue={r?.name ?? ""} placeholder="Старший монтажник" />

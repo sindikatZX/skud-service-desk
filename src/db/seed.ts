@@ -6,8 +6,9 @@ import {
 import { sql, eq, asc } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth";
 import { receive, issueToTeam, reserve, install } from "@/lib/services/inventory";
-import { SYSTEM_ROLES } from "@/lib/rbac";
+import { SYSTEM_ROLES, ADDED_PERMISSIONS } from "@/lib/rbac";
 import { ensureWarehouses } from "@/lib/services/warehouses";
+import { migrateCodes, nextCode, type CodedTable } from "@/lib/codes";
 
 /** Системные записи справочников: создаются при первом запуске и защищены от удаления. */
 const SYSTEM_TICKET_TYPES = [
@@ -40,30 +41,59 @@ const SYSTEM_CATEGORIES = [
 ];
 
 const SYSTEM_UNITS = [
-  { code: "шт", name: "Штука", sortOrder: 10 },
-  { code: "м", name: "Метр", sortOrder: 20 },
-  { code: "компл", name: "Комплект", sortOrder: 30 },
-  { code: "упак", name: "Упаковка", sortOrder: 40 },
+  { symbol: "шт", name: "Штука", sortOrder: 10 },
+  { symbol: "м", name: "Метр", sortOrder: 20 },
+  { symbol: "компл", name: "Комплект", sortOrder: 30 },
+  { symbol: "упак", name: "Упаковка", sortOrder: 40 },
 ];
+
+/** Вставляет отсутствующие системные записи (по sys_key), присваивая им коды формата XX_ГГГГ_NNNNN. */
+async function ensureSystemRows<T extends { code: string }>(
+  table: CodedTable,
+  existing: string[],
+  rows: T[],
+  insert: (row: T, code: string) => Promise<unknown>,
+) {
+  const have = new Set(existing);
+  for (const r of rows) {
+    if (have.has(r.code)) continue;
+    await insert(r, await nextCode(table));
+  }
+}
 
 /**
  * Создаёт отсутствующие системные записи справочников. Выполняется при каждом старте:
  * так обновление системы добавляет новые справочные записи, не трогая пользовательские.
  */
 export async function ensureSystemDirectories() {
-  await db
-    .insert(roles)
-    .values(SYSTEM_ROLES.map((r) => ({ ...r, isSystem: true })))
-    .onConflictDoNothing({ target: roles.code });
-  await db.insert(ticketTypes).values(SYSTEM_TICKET_TYPES.map((t) => ({ ...t, isSystem: true }))).onConflictDoNothing({ target: ticketTypes.code });
-  await db.insert(ticketPriorities).values(SYSTEM_PRIORITIES.map((p) => ({ ...p, isSystem: true }))).onConflictDoNothing({ target: ticketPriorities.code });
-  await db.insert(catalogCategories).values(SYSTEM_CATEGORIES.map((c) => ({ ...c, isSystem: true }))).onConflictDoNothing({ target: catalogCategories.code });
-  await db.insert(measureUnits).values(SYSTEM_UNITS.map((u) => ({ ...u, isSystem: true }))).onConflictDoNothing({ target: measureUnits.code });
+  // Перекодирование прежних кодов (admin, repair, шт…) в единый формат; системные ключи — в sys_key.
+  await migrateCodes();
+
+  const roleKeys = (await db.select({ k: roles.sysKey }).from(roles)).map((r) => r.k).filter((k): k is string => Boolean(k));
+  await ensureSystemRows("roles", roleKeys, SYSTEM_ROLES, (r, code) =>
+    db.insert(roles).values({ ...r, code, sysKey: r.code, isSystem: true }).onConflictDoNothing({ target: roles.sysKey }),
+  );
+  const typeKeys = (await db.select({ k: ticketTypes.sysKey }).from(ticketTypes)).map((r) => r.k).filter((k): k is string => Boolean(k));
+  await ensureSystemRows("ticket_types", typeKeys, SYSTEM_TICKET_TYPES, (t, code) =>
+    db.insert(ticketTypes).values({ ...t, code, sysKey: t.code, isSystem: true }).onConflictDoNothing({ target: ticketTypes.sysKey }),
+  );
+  const prioKeys = (await db.select({ k: ticketPriorities.sysKey }).from(ticketPriorities)).map((r) => r.k).filter((k): k is string => Boolean(k));
+  await ensureSystemRows("ticket_priorities", prioKeys, SYSTEM_PRIORITIES, (p, code) =>
+    db.insert(ticketPriorities).values({ ...p, code, sysKey: p.code, isSystem: true }).onConflictDoNothing({ target: ticketPriorities.sysKey }),
+  );
+  const catKeys = (await db.select({ k: catalogCategories.sysKey }).from(catalogCategories)).map((r) => r.k).filter((k): k is string => Boolean(k));
+  await ensureSystemRows("catalog_categories", catKeys, SYSTEM_CATEGORIES, (c, code) =>
+    db.insert(catalogCategories).values({ ...c, code, sysKey: c.code, isSystem: true }).onConflictDoNothing({ target: catalogCategories.sysKey }),
+  );
+  const unitSymbols = (await db.select({ s: measureUnits.symbol }).from(measureUnits)).map((r) => r.s);
+  await ensureSystemRows("measure_units", unitSymbols, SYSTEM_UNITS.map((u) => ({ ...u, code: u.symbol })), (u, code) =>
+    db.insert(measureUnits).values({ code, symbol: u.symbol, name: u.name, sortOrder: u.sortOrder, isSystem: true }),
+  );
   // Новые права у системных ролей (появившиеся после обновления) — добавляем, не трогая пользовательские настройки.
   for (const r of SYSTEM_ROLES) {
-    const extra = r.permissions.filter((p) => ["tickets.reopen", "inventory.transfer", "data.import"].includes(p));
+    const extra = r.permissions.filter((p) => ADDED_PERMISSIONS.includes(p));
     if (!extra.length) continue;
-    await db.execute(sql`update roles set permissions = (select array(select distinct unnest(permissions || ${sql.raw(`ARRAY[${extra.map((e) => `'${e}'`).join(",")}]::text[]`)}))) where code = ${r.code} and is_system = true`);
+    await db.execute(sql`update roles set permissions = (select array(select distinct unnest(permissions || ${sql.raw(`ARRAY[${extra.map((e) => `'${e}'`).join(",")}]::text[]`)}))) where sys_key = ${r.code} and is_system = true`);
   }
   await ensureWarehouses(true);
 }
@@ -81,10 +111,11 @@ export async function seedIfEmpty() {
   if (cnt > 0) return false;
   const pw = await hashPassword(process.env.SEED_PASSWORD || "password");
 
-  const roleId = await codeMap(await db.select({ id: roles.id, code: roles.code }).from(roles));
-  const typeId = await codeMap(await db.select({ id: ticketTypes.id, code: ticketTypes.code }).from(ticketTypes));
-  const prioId = await codeMap(await db.select({ id: ticketPriorities.id, code: ticketPriorities.code }).from(ticketPriorities));
-  const catId = await codeMap(await db.select({ id: catalogCategories.id, code: catalogCategories.code }).from(catalogCategories).orderBy(asc(catalogCategories.id)));
+  const key = (rows: { id: number; code: string | null }[]) => rows.filter((r): r is { id: number; code: string } => Boolean(r.code));
+  const roleId = await codeMap(key(await db.select({ id: roles.id, code: roles.sysKey }).from(roles)));
+  const typeId = await codeMap(key(await db.select({ id: ticketTypes.id, code: ticketTypes.sysKey }).from(ticketTypes)));
+  const prioId = await codeMap(key(await db.select({ id: ticketPriorities.id, code: ticketPriorities.sysKey }).from(ticketPriorities)));
+  const catId = await codeMap(key(await db.select({ id: catalogCategories.id, code: catalogCategories.sysKey }).from(catalogCategories).orderBy(asc(catalogCategories.id))));
   const R = (code: string) => roleId.get(code)!;
   const T = (code: string) => typeId.get(code)!;
   const P = (code: string) => prioId.get(code)!;
@@ -127,12 +158,12 @@ export async function seedIfEmpty() {
   await db.insert(vehicleAssignments).values([{ vehicleId: v1.id, teamId: team1.id }, { vehicleId: v2.id, teamId: team2.id }]);
 
   const [cam, nvr, ctrl, reader, lock, cable, mount, psu] = await db.insert(catalogItems).values([
-    { sku: "CAM-HIK-2CD2043", name: "IP-камера Hikvision DS-2CD2043G2-I 4Мп", categoryId: C("camera"), isSerialized: true, manufacturer: "Hikvision" },
+    { sku: "CAM-HIK-2CD2043", name: "IP-камера Hikvision DS-2CD2043G2-I 4Мп", categoryId: C("camera"), isSerialized: true, manufacturer: "Hikvision", price: "14900.00" },
     { sku: "NVR-HIK-7616", name: "Видеорегистратор Hikvision DS-7616NI-K2 16 кан.", categoryId: C("recorder"), isSerialized: true, manufacturer: "Hikvision" },
     { sku: "ACS-C2000", name: "Контроллер СКУД Болид С2000-2", categoryId: C("controller"), isSerialized: true, manufacturer: "Болид" },
     { sku: "RDR-PR-EH05", name: "Считыватель Proxy EH05 (EM-Marine)", categoryId: C("reader"), isSerialized: true, manufacturer: "IronLogic" },
     { sku: "LOCK-ML-300", name: "Замок электромагнитный ML-300", categoryId: C("lock"), isSerialized: false, manufacturer: "AccordTec" },
-    { sku: "CBL-UTP5E", name: "Кабель UTP cat.5e (бухта 305 м)", categoryId: C("cable"), unit: "м", isSerialized: false },
+    { sku: "CBL-UTP5E", name: "Кабель UTP cat.5e (бухта 305 м)", categoryId: C("cable"), unit: "м", isSerialized: false, price: "38.50" },
     { sku: "MNT-BRK-CAM", name: "Кронштейн для камеры настенный", categoryId: C("mount"), isSerialized: false },
     { sku: "PSU-12V-5A", name: "Блок питания 12В 5А", categoryId: C("power"), isSerialized: false },
   ]).returning();
@@ -222,5 +253,7 @@ export async function seedIfEmpty() {
   // 6. Новая — обследование
   await mk({ clientId: c2.id, siteId: s3.id, title: "Обследование под расширение СКУД на калитки", typeId: T("inspection"), priorityId: P("normal"), dueAt: new Date(now + 120 * h) });
 
+  // Коды формата XX_ГГГГ_NNNNN всем созданным записям справочников (клиенты, объекты, бригады, товары…)
+  await migrateCodes(true);
   return true;
 }

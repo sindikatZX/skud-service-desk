@@ -72,7 +72,10 @@ export const roles = pgTable(
   "roles",
   {
     id: serial("id").primaryKey(),
+    /** Уникальный код справочника вида RL_2025_00001 (генерируется системой). */
     code: text("code").notNull(),
+    /** Системный ключ (admin, dispatcher…) — на него опирается код; у пользовательских записей null. */
+    sysKey: text("sys_key"),
     name: text("name").notNull(),
     description: text("description"),
     /** Какие данные видит роль: все / только своей бригады / только своего клиента. */
@@ -88,7 +91,7 @@ export const roles = pgTable(
     sortOrder: integer("sort_order").notNull().default(100),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("roles_code_idx").on(t.code)],
+  (t) => [uniqueIndex("roles_code_idx").on(t.code), uniqueIndex("roles_sys_key_idx").on(t.sysKey)],
 );
 
 /** Тип работ по заявке (Монтаж, ТО, Ремонт…). */
@@ -97,13 +100,14 @@ export const ticketTypes = pgTable(
   {
     id: serial("id").primaryKey(),
     code: text("code").notNull(),
+    sysKey: text("sys_key"),
     name: text("name").notNull(),
     isSystem: boolean("is_system").notNull().default(false),
     isActive: boolean("is_active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(100),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("ticket_types_code_idx").on(t.code)],
+  (t) => [uniqueIndex("ticket_types_code_idx").on(t.code), uniqueIndex("ticket_types_sys_key_idx").on(t.sysKey)],
 );
 
 /** Приоритет заявки. slaHours задаёт срок исполнения по умолчанию. */
@@ -112,6 +116,7 @@ export const ticketPriorities = pgTable(
   {
     id: serial("id").primaryKey(),
     code: text("code").notNull(),
+    sysKey: text("sys_key"),
     name: text("name").notNull(),
     /** Часы на решение: подставляются в «Срок», если он не задан вручную. */
     slaHours: integer("sla_hours"),
@@ -122,7 +127,7 @@ export const ticketPriorities = pgTable(
     sortOrder: integer("sort_order").notNull().default(100),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("ticket_priorities_code_idx").on(t.code)],
+  (t) => [uniqueIndex("ticket_priorities_code_idx").on(t.code), uniqueIndex("ticket_priorities_sys_key_idx").on(t.sysKey)],
 );
 
 /** Категория номенклатуры (камера, контроллер, кабель…). */
@@ -131,6 +136,7 @@ export const catalogCategories = pgTable(
   {
     id: serial("id").primaryKey(),
     code: text("code").notNull(),
+    sysKey: text("sys_key"),
     name: text("name").notNull(),
     /** Родительская папка (иерархия групп номенклатуры как в 1С). null — корень. */
     parentId: integer("parent_id"),
@@ -141,7 +147,7 @@ export const catalogCategories = pgTable(
     sortOrder: integer("sort_order").notNull().default(100),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("catalog_categories_code_idx").on(t.code), index("catalog_categories_parent_idx").on(t.parentId)],
+  (t) => [uniqueIndex("catalog_categories_code_idx").on(t.code), uniqueIndex("catalog_categories_sys_key_idx").on(t.sysKey), index("catalog_categories_parent_idx").on(t.parentId)],
 );
 
 /** Единица измерения номенклатуры (шт, м, компл…). */
@@ -150,6 +156,8 @@ export const measureUnits = pgTable(
   {
     id: serial("id").primaryKey(),
     code: text("code").notNull(),
+    /** Краткое обозначение (шт, м, компл) — хранится в номенклатуре и работах как unit. */
+    symbol: text("symbol").notNull().default(""),
     name: text("name").notNull(),
     isSystem: boolean("is_system").notNull().default(false),
     isActive: boolean("is_active").notNull().default(true),
@@ -183,6 +191,7 @@ export const workCatalog = pgTable(
 
 export const clients = pgTable("clients", {
   id: serial("id").primaryKey(),
+  code: text("code").notNull().default(""),
   name: text("name").notNull(),
   inn: text("inn"),
   contactPerson: text("contact_person"),
@@ -197,6 +206,7 @@ export const users = pgTable(
   "users",
   {
     id: serial("id").primaryKey(),
+    code: text("code").notNull().default(""),
     email: text("email").notNull(),
     passwordHash: text("password_hash").notNull(),
     fullName: text("full_name").notNull(),
@@ -215,6 +225,7 @@ export const sites = pgTable(
   "sites",
   {
     id: serial("id").primaryKey(),
+    code: text("code").notNull().default(""),
     clientId: integer("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -233,6 +244,7 @@ export const sites = pgTable(
 
 export const teams = pgTable("teams", {
   id: serial("id").primaryKey(),
+  code: text("code").notNull().default(""),
   name: text("name").notNull(),
   description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
@@ -279,6 +291,7 @@ export const teamMembers = pgTable(
 
 export const vehicles = pgTable("vehicles", {
   id: serial("id").primaryKey(),
+  code: text("code").notNull().default(""),
   plateNumber: text("plate_number").notNull(),
   model: text("model").notNull(),
   year: integer("year"),
@@ -305,11 +318,13 @@ export const vehicleAssignments = pgTable(
 
 // ─────────────────────────── CATALOG / INVENTORY ───────────────────────────
 
-/** Номенклатура: тип оборудования/материала. */
+/** Справочник товаров (номенклатура): тип оборудования/материала. */
 export const catalogItems = pgTable(
   "catalog_items",
   {
     id: serial("id").primaryKey(),
+    /** Уникальный код справочника NM_2025_00001. */
+    code: text("code").notNull().default(""),
     sku: text("sku").notNull(),
     name: text("name").notNull(),
     /** Код элемента в 1С (для сопоставления при повторном импорте). */
@@ -323,10 +338,13 @@ export const catalogItems = pgTable(
     isSerialized: boolean("is_serialized").notNull().default(false),
     manufacturer: text("manufacturer"),
     description: text("description"),
+    /** Цена (необязательна). Видна только ролям с правом catalog.prices.view. */
+    price: numeric("price", { precision: 12, scale: 2 }),
+    priceUpdatedAt: timestamp("price_updated_at", { withTimezone: true }),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("catalog_sku_idx").on(t.sku)],
+  (t) => [uniqueIndex("catalog_sku_idx").on(t.sku), index("catalog_code_idx").on(t.code)],
 );
 
 /** Конкретная физическая единица серийного оборудования. */
@@ -631,6 +649,22 @@ export const ticketComments = pgTable(
   (t) => [index("comments_ticket_idx").on(t.ticketId, t.createdAt)],
 );
 
+// ─────────────────────────── АДМИНИСТРИРОВАНИЕ ───────────────────────────
+
+/** Журнал резервных копий БД (файлы лежат в BACKUP_DIR, здесь — метаданные). */
+export const dbBackups = pgTable("db_backups", {
+  id: serial("id").primaryKey(),
+  fileName: text("file_name").notNull(),
+  size: integer("size").notNull().default(0),
+  tables: integer("tables").notNull().default(0),
+  rows: integer("rows").notNull().default(0),
+  /** manual | auto (перед восстановлением/очисткой/исправлением) */
+  reason: text("reason").notNull().default("manual"),
+  note: text("note"),
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ─────────────────────────── RELATIONS ───────────────────────────
 
 export const clientsRelations = relations(clients, ({ many }) => ({
@@ -701,3 +735,4 @@ export type WarehouseKind = (typeof warehouseKindEnum.enumValues)[number];
 export type StockDocType = (typeof stockDocTypeEnum.enumValues)[number];
 export type RoleScope = (typeof roleScopeEnum.enumValues)[number];
 export type TicketStatus = (typeof ticketStatusEnum.enumValues)[number];
+export type DbBackup = typeof dbBackups.$inferSelect;
