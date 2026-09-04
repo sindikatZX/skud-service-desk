@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/page-auth";
 import { dashboardSummary, teamsStockSummary } from "@/lib/services/reports";
 import { listTickets } from "@/lib/services/tickets";
-import { Card, PageHeader, Stat, StatusBadge, Table, Td } from "@/components/ui";
+import { Card, PageHeader, Stat, StatusBadge, Table, Td, Fab } from "@/components/ui";
 import { fmtDate } from "@/lib/labels";
 import { can } from "@/lib/rbac";
 
@@ -22,7 +22,7 @@ export default async function Dashboard() {
   const openCount = (s.new ?? 0) + (s.assigned ?? 0) + (s.scheduled ?? 0) + (s.in_progress ?? 0) + (s.on_hold ?? 0);
   return (
     <div>
-      <PageHeader title="Главная" subtitle={`Добро пожаловать, ${user.fullName}`} action={can(user, "tickets.create") ? <Link href="/tickets/new" className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">+ Новая заявка</Link> : null} />
+      <PageHeader title="Главная" subtitle={`Добро пожаловать, ${user.fullName}`} action={can(user, "tickets.create") ? <Link href="/tickets/new" className="hidden rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white lg:inline-flex">+ Новая заявка</Link> : null} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
         <Stat label="Новые" value={s.new ?? 0} href="/tickets?status=new" />
         <Stat label="В работе" value={(s.in_progress ?? 0) + (s.scheduled ?? 0) + (s.assigned ?? 0)} href="/tickets?status=assigned,scheduled,in_progress" />
@@ -32,7 +32,20 @@ export default async function Dashboard() {
         <Stat label="Ср. время выполнения" value={summary.avgCompletionHours != null ? `${summary.avgCompletionHours} ч` : "—"} hint="от создания до выполнения" />
       </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        <Card title="Активные заявки" className="xl:col-span-2" action={<Link href="/tickets" className="text-sm text-indigo-600">Все →</Link>}>
+        <Card title="Активные заявки" className="xl:col-span-2" action={<Link href="/tickets?status=new,assigned,scheduled,in_progress,on_hold" className="text-sm text-indigo-600">Все →</Link>}>
+          <ul className="space-y-2 md:hidden">
+            {active.length === 0 && <li className="py-4 text-center text-sm text-slate-400">Активных заявок нет</li>}
+            {active.map((t) => (
+              <li key={t.id}>
+                <Link href={`/tickets/${t.id}`} className="block rounded-xl border border-slate-200 p-3 active:bg-slate-50">
+                  <div className="flex items-center justify-between gap-2"><span className="font-mono text-xs text-slate-500">{t.number}</span><StatusBadge status={t.status} /></div>
+                  <div className="mt-1 font-medium leading-snug">{t.title}</div>
+                  <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-slate-500"><span className="truncate">{t.clientName}{t.teamName ? ` · ${t.teamName}` : ""}</span><span className="shrink-0">до {fmtDate(t.dueAt)}</span></div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden md:block">
           <Table head={["№", "Заявка", "Клиент / объект", "Бригада", "Срок", "Статус"]} empty={!active.length}>
             {active.map((t) => (
               <tr key={t.id} className="hover:bg-slate-50">
@@ -45,6 +58,7 @@ export default async function Dashboard() {
               </tr>
             ))}
           </Table>
+          </div>
         </Card>
         <div className="space-y-4">
           <Card title="Просроченные">
@@ -70,6 +84,7 @@ export default async function Dashboard() {
           )}
         </div>
       </div>
+      {can(user, "tickets.create") && <Fab href="/tickets/new" label="Заявка" />}
     </div>
   );
 }

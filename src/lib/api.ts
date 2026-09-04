@@ -37,17 +37,22 @@ export function fail(err: unknown) {
   return NextResponse.json({ ok: false, error: { code: "INTERNAL", message } }, { status: 500 });
 }
 
+/**
+ * Контекст роута Next: второй аргумент обязателен — на этом настаивает проверка
+ * типов маршрутов (`ParamCheck<RouteContext>`). У статических роутов `params`
+ * приходит пустым объектом, поэтому читаем его защищённо.
+ */
 type Ctx = { params: Promise<Record<string, string>> };
 type Handler = (req: Request, ctx: { user: SessionUser; params: Record<string, string> }) => Promise<Response>;
 
 /** Обёртка для роутов: аутентификация + проверка права (любого из списка). */
 export function withAuth(handler: Handler, perms: Permission[] = []) {
-  return async (req: Request, ctx?: Ctx) => {
+  return async (req: Request, ctx: Ctx) => {
     try {
       const user = await getCurrentUser();
       if (!user) throw unauthorized();
       if (perms.length && !perms.some((p) => can(user, p))) throw forbidden();
-      const params = ctx?.params ? await ctx.params : {};
+      const params = (await ctx?.params) ?? {};
       return await handler(req, { user, params });
     } catch (e) {
       return fail(e);

@@ -50,11 +50,11 @@ export function Stat({ label, value, hint, href }: { label: string; value: React
   return href ? <Link href={href} className="block hover:opacity-90">{inner}</Link> : inner;
 }
 
-export function Table({ head, children, empty }: { head: ReactNode[]; children: ReactNode; empty?: boolean }) {
+export function Table({ head, children, empty, emptyText = "Нет данных" }: { head: ReactNode[]; children: ReactNode; empty?: boolean; emptyText?: string }) {
   return (
-    <div className="-mx-4 overflow-x-auto sm:mx-0">
+    <div className="-mx-4 overflow-x-auto overscroll-x-contain sm:mx-0 [-webkit-overflow-scrolling:touch]">
       <table className="min-w-full text-sm">
-        <thead>
+        <thead className="sticky top-0 z-[1] bg-white">
           <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
             {head.map((h, i) => (
               <th key={i} className="px-3 py-2 font-medium first:pl-4 sm:first:pl-3">{h}</th>
@@ -63,7 +63,7 @@ export function Table({ head, children, empty }: { head: ReactNode[]; children: 
         </thead>
         <tbody className="divide-y divide-slate-100">
           {empty ? (
-            <tr><td colSpan={head.length} className="px-3 py-6 text-center text-slate-400">Нет данных</td></tr>
+            <tr><td colSpan={head.length} className="px-3 py-6 text-center text-slate-400">{emptyText}</td></tr>
           ) : children}
         </tbody>
       </table>
@@ -74,10 +74,46 @@ export function Td({ children, className = "" }: { children?: ReactNode; classNa
   return <td className={`px-3 py-2 align-top first:pl-4 sm:first:pl-3 ${className}`}>{children}</td>;
 }
 
-export const inputCls = "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50";
-export const btnCls = "inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed";
-export const btnSecondaryCls = "inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50";
-export const btnDangerCls = "inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm hover:bg-rose-50 disabled:opacity-50";
+export const inputCls = "w-full min-h-[2.5rem] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50";
+const btnBase = "inline-flex min-h-[2.5rem] items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+export const btnCls = `${btnBase} bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800`;
+export const btnSecondaryCls = `${btnBase} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100`;
+export const btnDangerCls = `${btnBase} border border-rose-300 bg-white text-rose-700 hover:bg-rose-50 active:bg-rose-100`;
+
+/** Плавающая кнопка действия для мобильных (над нижней навигацией). Скрыта на desktop. */
+export function Fab({ href, label, icon = "+" }: { href: string; label: string; icon?: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className="fixed right-4 z-30 flex h-14 items-center gap-2 rounded-full bg-indigo-600 pl-4 pr-5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 active:bg-indigo-700 lg:hidden"
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 4.75rem)" }}
+    >
+      <span className="text-2xl leading-none">{icon}</span>
+      <span>{label}</span>
+    </Link>
+  );
+}
+
+/** Горизонтальная лента чипов-фильтров (ссылки). На мобильных прокручивается, на desktop переносится. */
+export function Chips({ items }: { items: { href: string; label: string; active?: boolean; count?: number; tone?: "rose" | "amber" }[] }) {
+  return (
+    <div className="no-scrollbar snap-chips -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+      {items.map((c) => (
+        <Link
+          key={c.href}
+          href={c.href}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap ${
+            c.active ? "border-indigo-600 bg-indigo-600 text-white" : c.tone === "rose" ? "border-rose-200 bg-rose-50 text-rose-700" : c.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-700 active:bg-slate-100"
+          }`}
+        >
+          {c.label}
+          {c.count != null && <span className={`rounded-full px-1.5 text-[10px] ${c.active ? "bg-white/20" : "bg-slate-100 text-slate-600"}`}>{c.count}</span>}
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (

@@ -1,1 +1,95 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+/* ─── Базовые мобильные настройки ───────────────────────────── */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+  overscroll-behavior-y: none; /* без «резинового» перетягивания в standalone-режиме */
+}
+
+body {
+  min-height: 100dvh;
+  touch-action: manipulation; /* убирает 300ms задержку и двойной тап-зум */
+}
+
+/* На iOS поля с font-size < 16px вызывают автозум страницы при фокусе. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Кнопки/ссылки — комфортная зона касания в мобильных меню */
+button, [role="button"], a {
+  -webkit-touch-callout: none;
+}
+
+/* ─── Утилиты ───────────────────────────────────────────────── */
+@utility safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility snap-chips {
+  scroll-snap-type: x proximity;
+  & > * {
+    scroll-snap-align: start;
+  }
+}
+@utility tap-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Дата/время в Safari iOS рендерятся с внутренними отступами — выравниваем высоту */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  min-height: 2.5rem;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Затемнённый фон для нижних шторок */
+.sheet-backdrop {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sheet-panel {
+  animation: sheet-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .sheet-panel { animation: none; }
+}
+
+/* Печать: убираем навигацию */
+@media print {
+  nav, aside, header, .no-print { display: none !important; }
+  main { padding: 0 !important; }
+}

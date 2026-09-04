@@ -10,13 +10,14 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
-    "jose": "^6.2.10",
+    "jose": "^6.2.11",
     "next": "16.2.6",
     "pg": "8.20.0",
     "react": "19.2.6",

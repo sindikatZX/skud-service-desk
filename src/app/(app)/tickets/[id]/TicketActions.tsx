@@ -66,9 +66,9 @@ export function TicketActions({ ticket, allowed, perms, types, priorities, isClo
 
   return (
     <Card title="Действия">
-      <div className="mb-3 flex flex-wrap gap-1">
+      <div className="no-scrollbar -mx-4 mb-3 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
         {tabs.map((t) => (
-          <button key={t.k} onClick={() => setTab(t.k)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${tab === t.k ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700"}`}>{t.l}</button>
+          <button key={t.k} type="button" onClick={() => setTab(t.k)} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium ${tab === t.k ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700 active:bg-slate-200"}`}>{t.l}</button>
         ))}
       </div>
       {msg && <div className={`mb-3 rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}</div>}
@@ -78,7 +78,7 @@ export function TicketActions({ ticket, allowed, perms, types, priorities, isClo
           <textarea className={inputCls} rows={2} placeholder={allowed.includes("done") ? "Комментарий / итог работ (сохраняется как результат при завершении)" : "Комментарий к смене статуса"} value={statusComment} onChange={(e) => setStatusComment(e.target.value)} />
           <div className="flex flex-wrap gap-2">
             {allowed.map((s) => (
-              <button key={s} disabled={busy} className={s === "cancelled" ? btnDangerCls : s === "done" || s === "closed" ? btnCls : btnSecondaryCls}
+              <button key={s} disabled={busy} className={`flex-1 sm:flex-none ${s === "cancelled" ? btnDangerCls : s === "done" || s === "closed" ? btnCls : btnSecondaryCls}`}
                 onClick={() => run(() => api(`/tickets/${ticket.id}/status`, { method: "POST", json: { status: s, comment: statusComment || undefined } }), `Статус: ${STATUS_LABELS[s]}`)}>
                 → {STATUS_LABELS[s]}
               </button>

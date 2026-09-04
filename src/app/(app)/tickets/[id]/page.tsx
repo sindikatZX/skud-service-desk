@@ -40,14 +40,18 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
       <PageHeader
         title={`${t.number} — ${t.title}`}
         subtitle={<span className="flex flex-wrap items-center gap-2"><StatusBadge status={t.status} /><span>{t.typeName}</span>·<span className={t.priorityColor}>{t.priorityName}</span>{overdue && <Badge tone="rose">Просрочена</Badge>}</span>}
-        action={<Link href="/tickets" className="text-sm text-indigo-600">← К списку</Link>}
+        action={<Link href="/tickets" className="hidden text-sm text-indigo-600 lg:inline">← К списку</Link>}
       />
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+      {/*
+        Сетка: desktop — 2/3 контент + 1/3 боковая панель.
+        Порядок в DOM (= порядок на мобильных): Информация → Действия → Работы/Материалы/Чат → История.
+      */}
+      <div className="grid gap-4 lg:grid-cols-3 lg:grid-rows-[auto_1fr]">
+        <div className="lg:col-span-2 lg:col-start-1 lg:row-start-1">
           <Card title="Информация">
             <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
               <div><dt className="text-xs text-slate-500">Клиент</dt><dd><Link href={`/clients/${t.clientId}`} className="font-medium text-indigo-700">{t.clientName}</Link></dd></div>
-              <div><dt className="text-xs text-slate-500">Объект</dt><dd><Link href={`/sites/${t.siteId}`} className="font-medium text-indigo-700">{t.siteName}</Link><div className="text-xs text-slate-500">{t.siteAddress}</div></dd></div>
+              <div><dt className="text-xs text-slate-500">Объект</dt><dd><Link href={`/sites/${t.siteId}`} className="font-medium text-indigo-700">{t.siteName}</Link><div className="text-xs text-slate-500">{t.siteAddress}</div>{(t.siteContactPerson || t.siteContactPhone) && <div className="text-xs text-slate-500">{t.siteContactPerson}{t.siteContactPerson && t.siteContactPhone ? " · " : ""}{t.siteContactPhone}</div>}</dd></div>
               <div><dt className="text-xs text-slate-500">Бригада</dt><dd>{t.teamName ? <Link href={`/teams/${t.teamId}`} className="font-medium text-indigo-700">{t.teamName}</Link> : "—"}{teamMembers.length > 0 && <div className="text-xs text-slate-500">{teamMembers.map((m) => m.fullName).join(", ")}</div>}</dd></div>
               <div><dt className="text-xs text-slate-500">Диспетчер</dt><dd>{t.dispatcherName ?? "—"}</dd></div>
               <div><dt className="text-xs text-slate-500">Выезд</dt><dd>{fmtDate(t.scheduledStart)}{t.scheduledEnd ? ` — ${fmtDate(t.scheduledEnd)}` : ""}</dd></div>
@@ -55,10 +59,41 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               <div><dt className="text-xs text-slate-500">Начата / выполнена / закрыта</dt><dd className="text-xs">{fmtDate(t.startedAt)} / {fmtDate(t.completedAt)} / {fmtDate(t.closedAt)}</dd></div>
               <div><dt className="text-xs text-slate-500">Создана</dt><dd className="text-xs">{fmtDate(t.createdAt)}</dd></div>
             </dl>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a href={`https://yandex.ru/maps/?text=${encodeURIComponent(t.siteAddress)}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 active:bg-slate-100">📍 Маршрут</a>
+              {t.siteContactPhone && <a href={`tel:${t.siteContactPhone.replace(/[^\d+]/g, "")}`} className="inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-800 active:bg-emerald-100">📞 Позвонить на объект</a>}
+            </div>
             {t.description && <p className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm">{t.description}</p>}
             {t.resultNote && <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm"><div className="text-xs font-semibold text-emerald-700">Результат работ</div><p className="whitespace-pre-wrap">{t.resultNote}</p></div>}
           </Card>
+        </div>
 
+        <div className="lg:col-start-3 lg:row-start-1">
+          <TicketActions
+            ticket={{ id: t.id, status: t.status, teamId: t.teamId, priorityId: t.priorityId, typeId: t.typeId, dueAt: t.dueAt?.toISOString() ?? null, scheduledStart: t.scheduledStart?.toISOString() ?? null, scheduledEnd: t.scheduledEnd?.toISOString() ?? null, resultNote: t.resultNote }}
+            allowed={allowedTransitions}
+            perms={{
+              assign: can(user, "tickets.assign"),
+              work: can(user, "tickets.work"),
+              install: can(user, "inventory.install"),
+              reserve: can(user, "inventory.reserve"),
+              remove: can(user, "tickets.delete"),
+            }}
+            types={dictionaries?.types.map((x) => ({ id: x.id, name: x.name })) ?? []}
+            priorities={dictionaries?.priorities.map((x) => ({ id: x.id, name: x.name })) ?? []}
+            isClosed={isClosed}
+            teams={teams.map((x) => ({ id: x.id, name: x.name, members: x.members.map((m) => m.fullName).join(", ") }))}
+            teamMembers={teamMembers.map((m) => ({ id: m.id, fullName: m.fullName }))}
+            teamStock={teamStock ? {
+              units: teamStock.units.map((u) => ({ id: u.id, name: u.name, serialNumber: u.serialNumber, status: u.status, ticketId: u.ticketId })),
+              balances: teamStock.balances.map((b) => ({ catalogItemId: b.catalogItemId, name: b.name, unit: b.unit, quantity: Number(b.quantity) })),
+              reservations: reservations.quantities.map((r) => ({ id: r.id, catalogItemId: r.catalogItemId, name: r.name, unit: r.unit, quantity: Number(r.quantity) })),
+              reservedUnits: reservations.units.map((u) => ({ id: u.id, name: u.name, serialNumber: u.serialNumber })),
+            } : null}
+          />
+        </div>
+
+        <div className="space-y-4 lg:col-span-2 lg:col-start-1 lg:row-start-2">
           <Card title="Выполненные работы">
             <Table head={["Работа", "Кол-во", "Время", "Исполнитель", "Дата"]} empty={!works.length}>
               {works.map((w) => (
@@ -101,29 +136,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
           />
         </div>
 
-        <div className="space-y-4">
-          <TicketActions
-            ticket={{ id: t.id, status: t.status, teamId: t.teamId, priorityId: t.priorityId, typeId: t.typeId, dueAt: t.dueAt?.toISOString() ?? null, scheduledStart: t.scheduledStart?.toISOString() ?? null, scheduledEnd: t.scheduledEnd?.toISOString() ?? null, resultNote: t.resultNote }}
-            allowed={allowedTransitions}
-            perms={{
-              assign: can(user, "tickets.assign"),
-              work: can(user, "tickets.work"),
-              install: can(user, "inventory.install"),
-              reserve: can(user, "inventory.reserve"),
-              remove: can(user, "tickets.delete"),
-            }}
-            types={dictionaries?.types.map((x) => ({ id: x.id, name: x.name })) ?? []}
-            priorities={dictionaries?.priorities.map((x) => ({ id: x.id, name: x.name })) ?? []}
-            isClosed={isClosed}
-            teams={teams.map((x) => ({ id: x.id, name: x.name, members: x.members.map((m) => m.fullName).join(", ") }))}
-            teamMembers={teamMembers.map((m) => ({ id: m.id, fullName: m.fullName }))}
-            teamStock={teamStock ? {
-              units: teamStock.units.map((u) => ({ id: u.id, name: u.name, serialNumber: u.serialNumber, status: u.status, ticketId: u.ticketId })),
-              balances: teamStock.balances.map((b) => ({ catalogItemId: b.catalogItemId, name: b.name, unit: b.unit, quantity: Number(b.quantity) })),
-              reservations: reservations.quantities.map((r) => ({ id: r.id, catalogItemId: r.catalogItemId, name: r.name, unit: r.unit, quantity: Number(r.quantity) })),
-              reservedUnits: reservations.units.map((u) => ({ id: u.id, name: u.name, serialNumber: u.serialNumber })),
-            } : null}
-          />
+        <div className="lg:col-start-3 lg:row-start-2">
           <Card title="История статусов">
             <ol className="space-y-2 text-sm">
               {history.map((h) => (

@@ -70,7 +70,7 @@ export function TicketForm({ clients, sites, teams, types, priorities, canAssign
           </div>
         )}
         {err && <div className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{err}</div>}
-        <button className={btnCls} disabled={busy || !clientSites.length}>{busy ? "Сохранение…" : "Создать заявку"}</button>
+        <button className={`${btnCls} w-full sm:w-auto`} disabled={busy || !clientSites.length}>{busy ? "Сохранение…" : "Создать заявку"}</button>
       </form>
     </Card>
   );

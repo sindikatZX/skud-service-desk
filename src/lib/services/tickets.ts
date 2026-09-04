@@ -70,6 +70,8 @@ const baseSelect = {
   siteId: tickets.siteId,
   siteName: sites.name,
   siteAddress: sites.address,
+  siteContactPerson: sites.contactPerson,
+  siteContactPhone: sites.contactPhone,
   teamId: tickets.teamId,
   teamName: teams.name,
   dispatcherId: tickets.dispatcherId,

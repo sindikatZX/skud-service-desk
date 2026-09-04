@@ -100,15 +100,23 @@ export function QuickForm({ title, endpoint, method = "POST", fields, submitLabe
   );
 }
 
-/** Кнопка одиночного действия (POST/PATCH/DELETE) с подтверждением. */
+/** Кнопка одиночного действия (POST/PATCH/DELETE) с подтверждением. Ошибка показывается рядом, без alert(). */
 export function ActionButton({ endpoint, method = "POST", json, label, confirm: c, className }: { endpoint: string; method?: "POST" | "PATCH" | "DELETE"; json?: unknown; label: string; confirm?: string; className?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   return (
-    <button disabled={busy} className={className ?? "text-xs text-indigo-600 hover:underline disabled:opacity-50"} onClick={async () => {
-      if (c && !window.confirm(c)) return;
-      setBusy(true);
-      try { await api(endpoint, { method, json }); router.refresh(); } catch (e) { alert((e as Error).message); } finally { setBusy(false); }
-    }}>{busy ? "…" : label}</button>
+    <span className="inline-flex flex-col items-start gap-1">
+      <button type="button" disabled={busy} className={className ?? "min-h-[2rem] text-xs text-indigo-600 hover:underline disabled:opacity-50"} onClick={async () => {
+        if (c && !window.confirm(c)) return;
+        setBusy(true); setErr(null);
+        try { await api(endpoint, { method, json }); router.refresh(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+      }}>{busy ? "…" : label}</button>
+      {err && (
+        <span role="alert" className="max-w-xs rounded-lg bg-rose-50 px-2 py-1 text-[11px] leading-snug text-rose-700">
+          {err} <button type="button" className="ml-1 underline" onClick={() => setErr(null)}>скрыть</button>
+        </span>
+      )}
+    </span>
   );
 }
