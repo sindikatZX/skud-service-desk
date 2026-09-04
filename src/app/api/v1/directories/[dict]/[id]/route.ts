@@ -6,9 +6,12 @@ import {
   updateCategory, deleteCategory,
   updateMeasureUnit, deleteMeasureUnit,
   updateRole, deleteRole,
+  updateWorkCatalog, deleteWorkCatalog,
+  updateWarehouseDict, deleteWarehouseDict,
 } from "@/lib/services/directories";
 import {
   ticketTypeUpdateSchema, priorityUpdateSchema, categoryUpdateSchema, measureUnitUpdateSchema, roleUpdateSchema,
+  workCatalogUpdateSchema, warehouseUpdateSchema,
 } from "@/lib/validators";
 
 type Handler = {
@@ -23,6 +26,8 @@ const HANDLERS: Record<string, Handler> = {
   categories: { schema: categoryUpdateSchema as ZodType<Record<string, unknown>>, update: updateCategory as Handler["update"], remove: deleteCategory },
   "measure-units": { schema: measureUnitUpdateSchema as ZodType<Record<string, unknown>>, update: updateMeasureUnit as Handler["update"], remove: deleteMeasureUnit },
   roles: { schema: roleUpdateSchema as ZodType<Record<string, unknown>>, update: updateRole as Handler["update"], remove: deleteRole },
+  works: { schema: workCatalogUpdateSchema as ZodType<Record<string, unknown>>, update: updateWorkCatalog as Handler["update"], remove: deleteWorkCatalog },
+  warehouses: { schema: warehouseUpdateSchema as ZodType<Record<string, unknown>>, update: updateWarehouseDict as Handler["update"], remove: deleteWarehouseDict },
 };
 
 function handlerFor(dict: string): Handler {

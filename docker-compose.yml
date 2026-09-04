@@ -27,7 +27,11 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?задайте AUTH_SECRET в .env (openssl rand -hex 32)}
       SEED_PASSWORD: ${SEED_PASSWORD:-password}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      UPLOAD_DIR: /data/uploads
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
       PORT: 3000
+    volumes:
+      - uploads:/data/uploads
     ports:
       - "${APP_PORT:-3000}:3000"
     healthcheck:
@@ -49,3 +53,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

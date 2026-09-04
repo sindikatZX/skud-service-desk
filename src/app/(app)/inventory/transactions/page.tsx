@@ -20,10 +20,10 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
     listTeamsWithDetails(),
     db.select({ id: clients.id, name: clients.name }).from(clients).orderBy(asc(clients.name)),
   ]);
-  const loc = (t: string | null, team: string | null) => (t ? (t === "team" && team ? team : LOC_LABELS[t]) : "");
+  const loc = (t: string | null, team: string | null, wh: string | null) => (t ? (t === "team" && team ? team : t === "warehouse" && wh ? wh : LOC_LABELS[t]) : "");
   return (
     <div>
-      <PageHeader title="Журнал складских операций" subtitle={`${rows.length} записей`} action={<Link href="/inventory" className="text-sm text-indigo-600">← Склад</Link>} />
+      <PageHeader title="Журнал складских операций" subtitle={`${rows.length} записей`} action={<div className="flex gap-3 text-sm"><Link href="/inventory/documents" className="text-indigo-600">Документы</Link><Link href="/inventory" className="text-indigo-600">← Склады</Link></div>} />
       <Card className="mb-4">
         <form className="grid gap-2 sm:grid-cols-5">
           <select name="type" defaultValue={sp.type ?? ""} className={inputCls}><option value="">Все операции</option>{Object.entries(TX_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -41,7 +41,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
               <Td className="text-xs font-medium">{TX_LABELS[x.type]}</Td>
               <Td><div className="text-sm">{x.itemName}</div>{x.unitId && <Link href={`/inventory/units/${x.unitId}`} className="font-mono text-xs text-indigo-600">{x.serialNumber}</Link>}</Td>
               <Td className="text-sm">{fmtQty(x.quantity)} {x.unit}</Td>
-              <Td className="text-xs">{loc(x.fromLocationType, x.fromTeamName)}{x.fromLocationType && x.toLocationType && " → "}{loc(x.toLocationType, x.toTeamName)}{x.toLocationType === "site" && x.siteName ? ` (${x.siteName})` : ""}</Td>
+              <Td className="text-xs">{loc(x.fromLocationType, x.fromTeamName, x.fromWarehouseName)}{x.fromLocationType && x.toLocationType && " → "}{loc(x.toLocationType, x.toTeamName, x.toWarehouseName)}{x.toLocationType === "site" && x.siteName ? ` (${x.siteName})` : ""}{x.documentId && <div><Link href={`/inventory/documents/${x.documentId}`} className="font-mono text-indigo-600">{x.documentNumber}</Link></div>}</Td>
               <Td className="text-xs">{x.teamName ?? "—"}</Td>
               <Td className="text-xs">{x.clientName && <div>{x.clientName}</div>}{x.ticketId && <Link href={`/tickets/${x.ticketId}`} className="font-mono text-indigo-600">{x.ticketNumber}</Link>}{!x.clientName && !x.ticketId && "—"}</Td>
               <Td className="text-xs">{x.actorName ?? "—"}{x.note && <div className="text-slate-400">{x.note}</div>}</Td>

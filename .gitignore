@@ -29,3 +29,6 @@ yarn-error.log*
 Thumbs.db
 .idea/
 .vscode/
+
+# загруженные вложения чата (вне public/)
+uploads/

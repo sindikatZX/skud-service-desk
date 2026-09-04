@@ -6,9 +6,12 @@ import {
   listCategories, createCategory,
   listMeasureUnits, createMeasureUnit,
   listRoles, createRole,
+  listWorkCatalog, createWorkCatalog,
+  listWarehousesDict, createWarehouseDict,
 } from "@/lib/services/directories";
 import {
   ticketTypeCreateSchema, priorityCreateSchema, categoryCreateSchema, measureUnitCreateSchema, roleCreateSchema,
+  workCatalogCreateSchema, warehouseCreateSchema,
 } from "@/lib/validators";
 
 /**
@@ -27,6 +30,8 @@ const HANDLERS: Record<string, Handler> = {
   categories: { list: listCategories, schema: categoryCreateSchema as ZodType<Record<string, unknown>>, create: createCategory as Handler["create"] },
   "measure-units": { list: listMeasureUnits, schema: measureUnitCreateSchema as ZodType<Record<string, unknown>>, create: createMeasureUnit as Handler["create"] },
   roles: { list: listRoles, schema: roleCreateSchema as ZodType<Record<string, unknown>>, create: createRole as Handler["create"] },
+  works: { list: listWorkCatalog, schema: workCatalogCreateSchema as ZodType<Record<string, unknown>>, create: createWorkCatalog as Handler["create"] },
+  warehouses: { list: () => listWarehousesDict(), schema: warehouseCreateSchema as ZodType<Record<string, unknown>>, create: createWarehouseDict as Handler["create"] },
 };
 
 function handlerFor(dict: string): Handler {

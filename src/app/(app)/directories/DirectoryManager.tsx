@@ -3,14 +3,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
 import { Card, Table, Td, Badge, Field, inputCls, btnCls, btnSecondaryCls } from "@/components/ui";
+import { CsvImport } from "@/components/CsvImport";
 
 export type DictField = {
   name: string;
   label: string;
-  type?: "text" | "number";
+  type?: "text" | "number" | "select";
   required?: boolean;
   placeholder?: string;
   hint?: string;
+  options?: { value: string | number; label: string }[];
+  /** приводить значение select к числу */
+  numeric?: boolean;
+  /** значение пустого варианта отправлять как null (например, «корень» у папки) */
+  nullable?: boolean;
 };
 
 export type DictRow = {
@@ -35,13 +41,17 @@ type Props = {
   codeHint?: string;
   /** Разрешить менять код у несистемных записей. */
   codeEditable?: boolean;
+  /** Ключ шаблона импорта CSV (если справочник поддерживает импорт). */
+  importEntity?: string;
+  /** Дополнительные колонки таблицы: ключ поля → заголовок. */
+  extraColumns?: { key: string; label: string; render?: "kindLabel" }[];
 };
 
 /**
  * Универсальный экран справочника: добавление, переименование, включение/отключение
  * и удаление записей. Системные записи можно менять, но не удалять.
  */
-export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, codeHint, codeEditable = true }: Props) {
+export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, codeHint, codeEditable = true, importEntity, extraColumns = [] }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
@@ -67,9 +77,9 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
     const fd = new FormData(form);
     const out: Record<string, unknown> = {};
     for (const [k, v] of fd.entries()) {
-      if (v === "") continue;
       const spec = [...extraFields].find((f) => f.name === k);
-      out[k] = spec?.type === "number" || k === "sortOrder" ? Number(v) : String(v);
+      if (v === "") { if (spec?.nullable) out[k] = null; continue; }
+      out[k] = spec?.type === "number" || spec?.numeric || k === "sortOrder" ? Number(v) : String(v);
     }
     out.isActive = fd.get("isActive") === "on";
     return out;
@@ -92,6 +102,12 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
       </Field>
       {extraFields.map((f) => (
         <Field key={f.name} label={f.label} hint={f.hint}>
+          {f.type === "select" ? (
+            <select name={f.name} className={inputCls} required={f.required} defaultValue={(row?.[f.name] as string | number | null) ?? ""}>
+              {!f.required && <option value="">—</option>}
+              {(f.options ?? []).filter((o) => !(row && f.name === "parentId" && o.value === row.id)).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          ) : (
           <input
             name={f.name}
             type={f.type ?? "text"}
@@ -100,6 +116,7 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
             placeholder={f.placeholder}
             defaultValue={(row?.[f.name] as string | number | null) ?? ""}
           />
+          )}
         </Field>
       ))}
       <Field label="Порядок сортировки">
@@ -118,6 +135,7 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
       action={!adding && <button className={btnCls} onClick={() => { setAdding(true); setEditing(null); }}>+ Добавить</button>}
     >
       {msg && <div className={`mb-3 rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}</div>}
+      {importEntity && <div className="mb-4"><CsvImport entity={importEntity} compact /></div>}
 
       {adding && (
         <form
@@ -154,7 +172,11 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
                 <span className="font-medium">{r.name}</span>
                 {r.isSystem && <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">системная</span>}
               </Td>
-              {extraFields.map((f) => <Td key={f.name} className="text-xs">{(r[f.name] as string | number | null) ?? "—"}</Td>)}
+              {extraFields.map((f) => {
+                const v = r[f.name] as string | number | null;
+                const label = f.type === "select" ? (f.options?.find((o) => String(o.value) === String(v))?.label ?? v) : v;
+                return <Td key={f.name} className="text-xs">{label ?? "—"}</Td>;
+              })}
               <Td className="text-xs">{r.usedBy}</Td>
               <Td>{r.isActive ? <Badge tone="green">активна</Badge> : <Badge>отключена</Badge>}</Td>
               <Td>

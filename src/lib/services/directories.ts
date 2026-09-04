@@ -8,7 +8,10 @@ import {
   users,
   tickets,
   catalogItems,
+  workCatalog,
+  ticketWorks,
 } from "@/db/schema";
+import { listWarehousesWithUsage, createWarehouse, updateWarehouse, deleteWarehouse } from "@/lib/services/warehouses";
 import { asc, eq, sql } from "drizzle-orm";
 import { conflict, notFound } from "@/lib/api";
 import type { Permission } from "@/lib/rbac";
@@ -37,7 +40,7 @@ async function usageCounts<K extends string | number>(
 
 /** Справочники для выпадающих списков в формах — только активные записи. */
 export async function getFormDictionaries() {
-  const [types, priorities, categories, units] = await Promise.all([
+  const [types, priorities, categories, units, works] = await Promise.all([
     db.select().from(ticketTypes).where(eq(ticketTypes.isActive, true)).orderBy(asc(ticketTypes.sortOrder), asc(ticketTypes.name)),
     db
       .select()
@@ -50,11 +53,54 @@ export async function getFormDictionaries() {
       .where(eq(catalogCategories.isActive, true))
       .orderBy(asc(catalogCategories.sortOrder), asc(catalogCategories.name)),
     db.select().from(measureUnits).where(eq(measureUnits.isActive, true)).orderBy(asc(measureUnits.sortOrder), asc(measureUnits.name)),
+    db.select().from(workCatalog).where(eq(workCatalog.isActive, true)).orderBy(asc(workCatalog.sortOrder), asc(workCatalog.name)),
   ]);
-  return { types, priorities, categories, units };
+  return { types, priorities, categories, units, works };
 }
 
-async function ensureCodeFree(table: typeof ticketTypes | typeof catalogCategories | typeof measureUnits | typeof ticketPriorities | typeof roles, code: string, exceptId?: number) {
+// ─────────────────────────── СПРАВОЧНИК РАБОТ ───────────────────────────
+
+export async function listWorkCatalog() {
+  const [rows, used] = await Promise.all([
+    db.select().from(workCatalog).orderBy(asc(workCatalog.sortOrder), asc(workCatalog.name)),
+    db
+      .select({ key: ticketWorks.description, count: sql<number>`count(*)::int` })
+      .from(ticketWorks)
+      .groupBy(ticketWorks.description)
+      .then(usageCounts),
+  ]);
+  return rows.map((r) => ({ ...r, usedBy: used.get(r.name) ?? 0 }));
+}
+
+export async function createWorkCatalog(input: { code: string; name: string; unit?: string; defaultMinutes?: number | null; price?: number | null; sortOrder?: number; isActive?: boolean }) {
+  await ensureCodeFree(workCatalog, input.code);
+  const [row] = await db.insert(workCatalog).values({ ...input, unit: input.unit || "шт", price: input.price != null ? String(input.price) : null, isSystem: false }).returning();
+  return row;
+}
+
+export async function updateWorkCatalog(id: number, patch: { code?: string; name?: string; unit?: string; defaultMinutes?: number | null; price?: number | null; sortOrder?: number; isActive?: boolean }) {
+  if (patch.code) await ensureCodeFree(workCatalog, patch.code, id);
+  const { price, ...rest } = patch;
+  const [row] = await db.update(workCatalog).set({ ...rest, ...(price !== undefined ? { price: price != null ? String(price) : null } : {}) }).where(eq(workCatalog.id, id)).returning();
+  if (!row) throw notFound("Работа не найдена");
+  return row;
+}
+
+export async function deleteWorkCatalog(id: number) {
+  const [row] = await db.select().from(workCatalog).where(eq(workCatalog.id, id));
+  if (!row) throw notFound("Работа не найдена");
+  if (row.isSystem) throw conflict(SYSTEM_LOCKED);
+  await db.delete(workCatalog).where(eq(workCatalog.id, id));
+}
+
+// ─────────────────────────── СКЛАДЫ ───────────────────────────
+
+export const listWarehousesDict = listWarehousesWithUsage;
+export const createWarehouseDict = createWarehouse;
+export const updateWarehouseDict = updateWarehouse;
+export const deleteWarehouseDict = deleteWarehouse;
+
+async function ensureCodeFree(table: typeof ticketTypes | typeof catalogCategories | typeof measureUnits | typeof ticketPriorities | typeof roles | typeof workCatalog, code: string, exceptId?: number) {
   const rows = await db.select({ id: table.id }).from(table).where(eq(table.code, code));
   if (rows.some((r) => r.id !== exceptId)) throw conflict(`Код «${code}» уже занят в этом справочнике`);
 }
@@ -155,14 +201,26 @@ export async function listCategories() {
   return rows.map((r) => ({ ...r, usedBy: used.get(r.id) ?? 0 }));
 }
 
-export async function createCategory(input: { code: string; name: string; sortOrder?: number; isActive?: boolean }) {
+export async function createCategory(input: { code: string; name: string; parentId?: number | null; sortOrder?: number; isActive?: boolean }) {
   await ensureCodeFree(catalogCategories, input.code);
-  const [row] = await db.insert(catalogCategories).values({ ...input, isSystem: false }).returning();
+  const [row] = await db.insert(catalogCategories).values({ ...input, parentId: input.parentId ?? null, isSystem: false }).returning();
   return row;
 }
 
-export async function updateCategory(id: number, patch: { code?: string; name?: string; sortOrder?: number; isActive?: boolean }) {
+export async function updateCategory(id: number, patch: { code?: string; name?: string; parentId?: number | null; sortOrder?: number; isActive?: boolean }) {
   if (patch.code) await ensureCodeFree(catalogCategories, patch.code, id);
+  if (patch.parentId) {
+    // защита от цикла: родитель не может быть потомком редактируемой папки
+    if (patch.parentId === id) throw conflict("Папка не может быть вложена сама в себя");
+    const all = await db.select({ id: catalogCategories.id, parentId: catalogCategories.parentId }).from(catalogCategories);
+    let cur: number | null = patch.parentId;
+    const guard = new Set<number>();
+    while (cur && !guard.has(cur)) {
+      if (cur === id) throw conflict("Нельзя переместить папку в её собственную подпапку");
+      guard.add(cur);
+      cur = all.find((c) => c.id === cur)?.parentId ?? null;
+    }
+  }
   const [row] = await db.update(catalogCategories).set(patch).where(eq(catalogCategories.id, id)).returning();
   if (!row) throw notFound("Категория не найдена");
   return row;
@@ -174,6 +232,8 @@ export async function deleteCategory(id: number) {
   if (row.isSystem) throw conflict(SYSTEM_LOCKED);
   const [used] = await db.select({ n: sql<number>`count(*)::int` }).from(catalogItems).where(eq(catalogItems.categoryId, id));
   if (used.n > 0) throw conflict(`Категорию используют ${used.n} позиций номенклатуры. Переведите их в другую категорию или отключите запись.`);
+  const [children] = await db.select({ n: sql<number>`count(*)::int` }).from(catalogCategories).where(eq(catalogCategories.parentId, id));
+  if (children.n > 0) throw conflict(`В папке есть ${children.n} вложенных папок. Сначала удалите или перенесите их.`);
   await db.delete(catalogCategories).where(eq(catalogCategories.id, id));
 }
 

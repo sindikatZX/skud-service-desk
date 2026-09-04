@@ -1,6 +1,7 @@
 import { db } from "@/db";
-import { ticketComments, users, roles } from "@/db/schema";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { ticketComments, users, roles, ticketAttachments } from "@/db/schema";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { attachToComment, deleteForComment, storeFiles, toDto, type AttachmentDto } from "@/lib/services/attachments";
 import { conflict, forbidden, notFound } from "@/lib/api";
 import type { SessionUser } from "@/lib/auth";
 import { can } from "@/lib/rbac";
@@ -26,6 +27,7 @@ export type ChatMessage = {
   createdAt: Date;
   own: boolean;
   canDelete: boolean;
+  attachments: AttachmentDto[];
 };
 
 /** Может ли пользователь видеть внутренние сообщения. */
@@ -68,6 +70,16 @@ export async function listMessages(
     .orderBy(asc(ticketComments.id))
     .limit(opts.limit ?? 300);
 
+  const ids = rows.map((r) => r.id);
+  const files = ids.length ? await db.select().from(ticketAttachments).where(inArray(ticketAttachments.commentId, ids)) : [];
+  const byComment = new Map<number, AttachmentDto[]>();
+  for (const f of files) {
+    if (!f.commentId) continue;
+    const list = byComment.get(f.commentId) ?? [];
+    list.push(toDto(f));
+    byComment.set(f.commentId, list);
+  }
+
   return rows.map((r) => ({
     id: r.id,
     ticketId: r.ticketId,
@@ -81,7 +93,25 @@ export async function listMessages(
     createdAt: r.createdAt,
     own: r.authorId === user.id,
     canDelete: r.authorId === user.id || canModerate(user),
+    attachments: byComment.get(r.id) ?? [],
   }));
+}
+
+/** Сообщение с вложениями (multipart). Текст может быть пустым, если есть файлы. */
+export async function postMessageWithFiles(user: SessionUser, ticketId: number, text: string, isInternal: boolean | undefined, files: File[]) {
+  const ticket = await getTicket(user, ticketId);
+  if (!can(user, "chat.write")) throw forbidden("Нет права писать в чат заявки");
+  if (["closed", "cancelled"].includes(ticket.status)) throw conflict("Заявка завершена — обсуждение закрыто");
+  const value = text.trim();
+  if (!value && !files.length) throw conflict("Добавьте текст или файлы");
+  const internal = seesInternal(user) ? (isInternal ?? true) : false;
+  const saved = await storeFiles(user, ticketId, files);
+  const [row] = await db
+    .insert(ticketComments)
+    .values({ ticketId, authorId: user.id, authorName: user.fullName, text: value || (saved.length ? `📎 ${saved.length} файл(ов)` : ""), isInternal: internal })
+    .returning();
+  await attachToComment(saved.map((s) => s.id), row.id);
+  return { ...row, attachments: saved.map(toDto) };
 }
 
 export async function postMessage(user: SessionUser, ticketId: number, text: string, isInternal?: boolean) {
@@ -117,6 +147,7 @@ export async function deleteMessage(user: SessionUser, messageId: number) {
   if (!msg) throw notFound("Сообщение не найдено");
   await getTicket(user, msg.ticketId);
   if (msg.authorId !== user.id && !canModerate(user)) throw forbidden("Удалить можно только своё сообщение");
+  await deleteForComment(messageId);
   await db.delete(ticketComments).where(eq(ticketComments.id, messageId));
 }
 

@@ -51,7 +51,14 @@ export const txTypeEnum = pgEnum("stock_tx_type", [
   "unreserve",
   "install",
   "write_off",
+  "transfer",
 ]);
+
+/** Тип складского документа: поступление (партия), перемещение, списание. */
+export const stockDocTypeEnum = pgEnum("stock_doc_type", ["receipt", "transfer", "writeoff"]);
+
+/** Вид склада: центральный, транзитный, склад бригады (привязан к бригаде), прочий. */
+export const warehouseKindEnum = pgEnum("warehouse_kind", ["central", "transit", "team", "other"]);
 
 export const reservationStatusEnum = pgEnum("reservation_status", ["active", "consumed", "cancelled"]);
 
@@ -125,12 +132,16 @@ export const catalogCategories = pgTable(
     id: serial("id").primaryKey(),
     code: text("code").notNull(),
     name: text("name").notNull(),
+    /** Родительская папка (иерархия групп номенклатуры как в 1С). null — корень. */
+    parentId: integer("parent_id"),
+    /** Код группы во внешней системе (1С) — для повторного импорта. */
+    externalCode: text("external_code"),
     isSystem: boolean("is_system").notNull().default(false),
     isActive: boolean("is_active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(100),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("catalog_categories_code_idx").on(t.code)],
+  (t) => [uniqueIndex("catalog_categories_code_idx").on(t.code), index("catalog_categories_parent_idx").on(t.parentId)],
 );
 
 /** Единица измерения номенклатуры (шт, м, компл…). */
@@ -146,6 +157,26 @@ export const measureUnits = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("measure_units_code_idx").on(t.code)],
+);
+
+/** Справочник работ (виды услуг): подставляется в акт выполненных работ по заявке. */
+export const workCatalog = pgTable(
+  "work_catalog",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    unit: text("unit").notNull().default("шт"),
+    /** Нормативная длительность, минут. */
+    defaultMinutes: integer("default_minutes"),
+    price: numeric("price", { precision: 12, scale: 2 }),
+    externalCode: text("external_code"),
+    isSystem: boolean("is_system").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(100),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("work_catalog_code_idx").on(t.code)],
 );
 
 // ─────────────────────────── USERS / CLIENTS ───────────────────────────
@@ -208,6 +239,27 @@ export const teams = pgTable("teams", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Склады (мультисклад). Центральный и транзитный создаются автоматически; для каждой
+ * бригады заводится склад вида «team» (остатки бригады = остатки её склада).
+ */
+export const warehouses = pgTable(
+  "warehouses",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    kind: warehouseKindEnum("kind").notNull().default("other"),
+    teamId: integer("team_id").references(() => teams.id, { onDelete: "cascade" }),
+    address: text("address"),
+    isSystem: boolean("is_system").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(100),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("warehouses_code_idx").on(t.code), uniqueIndex("warehouses_team_idx").on(t.teamId)],
+);
+
 export const teamMembers = pgTable(
   "team_members",
   {
@@ -260,6 +312,9 @@ export const catalogItems = pgTable(
     id: serial("id").primaryKey(),
     sku: text("sku").notNull(),
     name: text("name").notNull(),
+    /** Код элемента в 1С (для сопоставления при повторном импорте). */
+    externalCode: text("external_code"),
+    fullName: text("full_name"),
     categoryId: integer("category_id")
       .notNull()
       .references(() => catalogCategories.id),
@@ -286,9 +341,13 @@ export const equipmentUnits = pgTable(
     macAddress: text("mac_address"),
     status: unitStatusEnum("status").notNull().default("in_warehouse"),
     locationType: locationTypeEnum("location_type").notNull().default("warehouse"),
+    /** Склад (для locationType = warehouse). */
+    warehouseId: integer("warehouse_id"),
     teamId: integer("team_id").references(() => teams.id, { onDelete: "set null" }),
     siteId: integer("site_id").references(() => sites.id, { onDelete: "set null" }),
     ticketId: integer("ticket_id"),
+    /** Документ поступления (партия), которым единица оприходована. */
+    receiptDocumentId: integer("receipt_document_id"),
     installedAt: timestamp("installed_at", { withTimezone: true }),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -311,12 +370,14 @@ export const stockBalances = pgTable(
       .notNull()
       .references(() => catalogItems.id),
     locationType: locationTypeEnum("location_type").notNull(),
-    /** 0 для центрального склада, id бригады для остатков бригады */
+    /** 0 для склада, id бригады для остатков бригады */
     teamId: integer("team_id").notNull().default(0),
+    /** id склада для locationType = warehouse, 0 для остатков бригады */
+    warehouseId: integer("warehouse_id").notNull().default(0),
     quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("stock_balance_uniq").on(t.catalogItemId, t.locationType, t.teamId)],
+  (t) => [uniqueIndex("stock_balance_uniq").on(t.catalogItemId, t.locationType, t.teamId, t.warehouseId)],
 );
 
 /** Резервы несерийных материалов под заявку. */
@@ -330,6 +391,7 @@ export const stockReservations = pgTable(
     ticketId: integer("ticket_id").notNull(),
     locationType: locationTypeEnum("location_type").notNull(),
     teamId: integer("team_id").notNull().default(0),
+    warehouseId: integer("warehouse_id").notNull().default(0),
     quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
     status: reservationStatusEnum("status").notNull().default("active"),
     createdBy: integer("created_by").references(() => users.id),
@@ -353,6 +415,10 @@ export const stockTransactions = pgTable(
     fromTeamId: integer("from_team_id"),
     toLocationType: locationTypeEnum("to_location_type"),
     toTeamId: integer("to_team_id"),
+    fromWarehouseId: integer("from_warehouse_id"),
+    toWarehouseId: integer("to_warehouse_id"),
+    /** Складской документ (поступление/перемещение/списание), породивший операцию. */
+    documentId: integer("document_id"),
     teamId: integer("team_id"),
     ticketId: integer("ticket_id"),
     clientId: integer("client_id"),
@@ -362,12 +428,84 @@ export const stockTransactions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    index("tx_document_idx").on(t.documentId),
     index("tx_unit_idx").on(t.unitId),
     index("tx_ticket_idx").on(t.ticketId),
     index("tx_team_idx").on(t.teamId),
     index("tx_client_idx").on(t.clientId),
     index("tx_created_idx").on(t.createdAt),
   ],
+);
+
+/**
+ * Складские документы: Поступление (= партия), Перемещение, Списание.
+ * Нумеруются по типу (ПН-000001, ПМ-000001, СП-000001), имеют дату и строки.
+ */
+export const stockDocuments = pgTable(
+  "stock_documents",
+  {
+    id: serial("id").primaryKey(),
+    type: stockDocTypeEnum("type").notNull(),
+    number: text("number").notNull(),
+    /** Номер входящего документа поставщика (для поступления). */
+    externalNumber: text("external_number"),
+    docDate: timestamp("doc_date", { withTimezone: true }).notNull().defaultNow(),
+    fromWarehouseId: integer("from_warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
+    toWarehouseId: integer("to_warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
+    supplier: text("supplier"),
+    note: text("note"),
+    linesCount: integer("lines_count").notNull().default(0),
+    totalQuantity: numeric("total_quantity", { precision: 14, scale: 3 }).notNull().default("0"),
+    actorId: integer("actor_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("stock_documents_number_idx").on(t.type, t.number), index("stock_documents_date_idx").on(t.docDate)],
+);
+
+export const stockDocumentLines = pgTable(
+  "stock_document_lines",
+  {
+    id: serial("id").primaryKey(),
+    documentId: integer("document_id")
+      .notNull()
+      .references(() => stockDocuments.id, { onDelete: "cascade" }),
+    lineNo: integer("line_no").notNull().default(1),
+    catalogItemId: integer("catalog_item_id")
+      .notNull()
+      .references(() => catalogItems.id),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull().default("1"),
+    /** Серийные номера строки (для серийного оборудования). */
+    serialNumbers: text("serial_numbers")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    price: numeric("price", { precision: 12, scale: 2 }),
+    note: text("note"),
+  },
+  (t) => [index("stock_document_lines_doc_idx").on(t.documentId), index("stock_document_lines_item_idx").on(t.catalogItemId)],
+);
+
+/**
+ * Вложения чата заявки. Файлы хранятся вне public/ под случайными именами без
+ * расширения; отдаются только через API с проверкой доступа и безопасными заголовками.
+ */
+export const ticketAttachments = pgTable(
+  "ticket_attachments",
+  {
+    id: serial("id").primaryKey(),
+    ticketId: integer("ticket_id").notNull(),
+    commentId: integer("comment_id"),
+    uploaderId: integer("uploader_id").references(() => users.id, { onDelete: "set null" }),
+    originalName: text("original_name").notNull(),
+    storedName: text("stored_name").notNull(),
+    mimeType: text("mime_type").notNull().default("application/octet-stream"),
+    size: integer("size").notNull().default(0),
+    /** image | video | audio | pdf | file — определяется по содержимому, не по расширению. */
+    kind: text("kind").notNull().default("file"),
+    sha256: text("sha256"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("attachments_ticket_idx").on(t.ticketId), index("attachments_comment_idx").on(t.commentId)],
 );
 
 // ─────────────────────────── TICKETS ───────────────────────────
@@ -554,5 +692,12 @@ export type TicketPriority = typeof ticketPriorities.$inferSelect;
 export type CatalogCategory = typeof catalogCategories.$inferSelect;
 export type MeasureUnit = typeof measureUnits.$inferSelect;
 export type TicketComment = typeof ticketComments.$inferSelect;
+export type Warehouse = typeof warehouses.$inferSelect;
+export type StockDocument = typeof stockDocuments.$inferSelect;
+export type StockDocumentLine = typeof stockDocumentLines.$inferSelect;
+export type TicketAttachment = typeof ticketAttachments.$inferSelect;
+export type WorkCatalogItem = typeof workCatalog.$inferSelect;
+export type WarehouseKind = (typeof warehouseKindEnum.enumValues)[number];
+export type StockDocType = (typeof stockDocTypeEnum.enumValues)[number];
 export type RoleScope = (typeof roleScopeEnum.enumValues)[number];
 export type TicketStatus = (typeof ticketStatusEnum.enumValues)[number];

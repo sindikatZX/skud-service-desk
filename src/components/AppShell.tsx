@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SessionUser } from "@/lib/auth";
 import { can } from "@/lib/rbac";
@@ -22,6 +23,7 @@ export function navFor(user: SessionUser): NavItem[] {
   if (can(user, "users.manage")) items.push({ href: "/employees", label: "Сотрудники", icon: "users", short: "Люди" });
   if (can(user, "directories.manage")) items.push({ href: "/directories", label: "Справочники", icon: "settings", short: "Настройки" });
   if (can(user, "reports.view") || can(user, "reports.inventory")) items.push({ href: "/reports", label: "Отчёты", icon: "chart" });
+  items.push({ href: "/profile", label: "Моя учётная запись", icon: "user", short: "Профиль" });
   return items;
 }
 
@@ -52,7 +54,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           <div className="flex items-center gap-3">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">{profile.initials}</div>
             <div className="min-w-0">
-              <div className="truncate font-medium">{user.fullName}</div>
+              <Link href="/profile" className="block truncate font-medium hover:text-indigo-700">{user.fullName}</Link>
               <div className="truncate text-xs text-slate-500">{user.roleName}</div>
             </div>
           </div>

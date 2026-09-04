@@ -30,16 +30,17 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     can(user, "tickets.assign") ? listTeamsWithDetails() : Promise.resolve([]),
     t.teamId && (can(user, "inventory.install") || can(user, "inventory.reserve")) ? getStock("team", t.teamId) : Promise.resolve(null),
     listMessages(user, id),
-    can(user, "tickets.assign") ? getFormDictionaries() : Promise.resolve(null),
+    can(user, "tickets.assign") || can(user, "tickets.work") ? getFormDictionaries() : Promise.resolve(null),
   ]);
   const isClosed = ["closed", "cancelled"].includes(t.status);
+  const canReopenClosed = t.status === "closed" && allowedTransitions.length > 0;
   const overdue = t.dueAt && new Date(t.dueAt) < new Date() && !["done", "closed", "cancelled"].includes(t.status);
 
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title={`${t.number} — ${t.title}`}
-        subtitle={<span className="flex flex-wrap items-center gap-2"><StatusBadge status={t.status} /><span>{t.typeName}</span>·<span className={t.priorityColor}>{t.priorityName}</span>{overdue && <Badge tone="rose">Просрочена</Badge>}</span>}
+        subtitle={<span className="flex flex-wrap items-center gap-2"><StatusBadge status={t.status} /><span>{t.typeName}</span>·<span className={t.priorityColor}>{t.priorityName}</span>{overdue && <Badge tone="rose">Просрочена</Badge>}{canReopenClosed && <Badge tone="amber">Администратор может вернуть в работу</Badge>}</span>}
         action={<Link href="/tickets" className="hidden text-sm text-indigo-600 lg:inline">← К списку</Link>}
       />
       {/*
@@ -80,6 +81,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               remove: can(user, "tickets.delete"),
             }}
             types={dictionaries?.types.map((x) => ({ id: x.id, name: x.name })) ?? []}
+            works={dictionaries?.works.map((w) => ({ id: w.id, name: w.name, unit: w.unit, defaultMinutes: w.defaultMinutes })) ?? []}
             priorities={dictionaries?.priorities.map((x) => ({ id: x.id, name: x.name })) ?? []}
             isClosed={isClosed}
             teams={teams.map((x) => ({ id: x.id, name: x.name, members: x.members.map((m) => m.fullName).join(", ") }))}

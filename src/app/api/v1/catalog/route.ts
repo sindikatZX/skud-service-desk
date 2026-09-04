@@ -4,6 +4,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { ok, withAuth, parseBody, conflict } from "@/lib/api";
 import { catalogCreateSchema } from "@/lib/validators";
 import { assertMeasureUnitExists } from "@/lib/services/directories";
+import { generateSku } from "@/lib/services/import";
 
 export const GET = withAuth(async () => {
   const rows = await db
@@ -13,6 +14,7 @@ export const GET = withAuth(async () => {
       name: catalogItems.name,
       categoryId: catalogItems.categoryId,
       categoryName: catalogCategories.name,
+      externalCode: catalogItems.externalCode,
       unit: catalogItems.unit,
       isSerialized: catalogItems.isSerialized,
       manufacturer: catalogItems.manufacturer,
@@ -31,8 +33,10 @@ export const POST = withAuth(async (req) => {
   const [category] = await db.select({ id: catalogCategories.id }).from(catalogCategories).where(eq(catalogCategories.id, b.categoryId));
   if (!category) throw conflict("Категория не найдена в справочнике");
   await assertMeasureUnitExists(b.unit);
-  const [exists] = await db.select({ id: catalogItems.id }).from(catalogItems).where(eq(catalogItems.sku, b.sku));
-  if (exists) throw conflict(`Артикул «${b.sku}» уже используется`);
-  const [c] = await db.insert(catalogItems).values(b).returning();
+  // Артикул не обязателен: если не задан — генерируется из кода 1С или по времени.
+  const sku = b.sku ?? (await generateSku(b.externalCode));
+  const [exists] = await db.select({ id: catalogItems.id }).from(catalogItems).where(eq(catalogItems.sku, sku));
+  if (exists) throw conflict(`Артикул «${sku}» уже используется`);
+  const [c] = await db.insert(catalogItems).values({ ...b, sku }).returning();
   return ok(c, { status: 201 });
 }, ["catalog.manage"]);

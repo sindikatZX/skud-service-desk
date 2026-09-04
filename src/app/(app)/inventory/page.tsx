@@ -1,46 +1,66 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { catalogItems } from "@/db/schema";
+import { catalogItems, catalogCategories } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { requireUser } from "@/lib/page-auth";
-import { can } from "@/lib/rbac";
-import { getStock } from "@/lib/services/inventory";
-import { teamsStockSummary } from "@/lib/services/reports";
-import { listTeamsWithDetails } from "@/lib/services/teams";
-import { Card, PageHeader, Stat } from "@/components/ui";
-import { StockView } from "@/components/StockView";
-import { InventoryOps } from "./InventoryOps";
+import { can, canWithRole } from "@/lib/rbac";
+import { getStockByWarehouse, warehousesSummary } from "@/lib/services/inventory";
+import { PageHeader, Stat } from "@/components/ui";
+import { WarehouseWorkspace } from "./WarehouseWorkspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function InventoryPage() {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser(["inventory.read.all"]);
-  const [stock, items, teams, summary] = await Promise.all([
-    getStock("warehouse", 0),
-    db.select().from(catalogItems).where(eq(catalogItems.isActive, true)).orderBy(asc(catalogItems.name)),
-    listTeamsWithDetails(),
-    teamsStockSummary(),
+  const sp = await searchParams;
+  const whs = await warehousesSummary();
+  const requested = Number(sp.wh);
+  const current = whs.find((w) => w.id === requested) ?? whs.find((w) => w.kind === "central") ?? whs[0];
+  const [stock, items] = await Promise.all([
+    current ? getStockByWarehouse(current.id) : Promise.resolve({ balances: [], units: [], reservations: [] }),
+    db
+      .select({ id: catalogItems.id, sku: catalogItems.sku, name: catalogItems.name, unit: catalogItems.unit, isSerialized: catalogItems.isSerialized, categoryId: catalogItems.categoryId, categoryName: catalogCategories.name })
+      .from(catalogItems)
+      .innerJoin(catalogCategories, eq(catalogCategories.id, catalogItems.categoryId))
+      .where(eq(catalogItems.isActive, true))
+      .orderBy(asc(catalogItems.name)),
   ]);
-  const perms = { receive: can(user, "inventory.receive"), issue: can(user, "inventory.issue"), writeoff: can(user, "inventory.writeoff") };
-  const freeUnits = stock.units.filter((u) => u.status === "in_warehouse");
+  const perms = {
+    receive: can(user, "inventory.receive"),
+    transfer: canWithRole(user, "inventory.transfer") || can(user, "inventory.issue"),
+    writeoff: can(user, "inventory.writeoff"),
+  };
+  const totalUnits = whs.reduce((a, w) => a + w.unitsFree, 0);
+  const totalReserved = whs.reduce((a, w) => a + w.unitsReserved, 0);
+
   return (
     <div>
-      <PageHeader title="Центральный склад" subtitle="Остатки, поступления, отгрузка бригадам" action={<div className="flex gap-3 text-sm"><Link href="/inventory/transactions" className="text-indigo-600">Журнал операций →</Link><Link href="/reports#consumption" className="text-indigo-600">Расход по бригадам →</Link></div>} />
+      <PageHeader
+        title="Склады"
+        subtitle="Мультисклад: остатки по каждому складу, поступления партиями, перемещения и списания документами"
+        action={<div className="flex flex-wrap gap-3 text-sm"><Link href="/inventory/documents" className="text-indigo-600">Документы →</Link><Link href="/inventory/transactions" className="text-indigo-600">Журнал операций →</Link><Link href="/reports#consumption" className="text-indigo-600">Расход по бригадам →</Link></div>}
+      />
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Серийных единиц на складе" value={freeUnits.length} />
-        <Stat label="Позиций материалов" value={stock.balances.length} />
-        <Stat label="У бригад (ед.)" value={summary.reduce((a, s) => a + s.unitsAtTeam + s.unitsReserved, 0)} />
-        <Stat label="Резерв со склада" value={stock.units.filter((u) => u.status === "reserved").length + stock.reservations.length} />
+        <Stat label="Складов" value={whs.length} hint={`${whs.filter((w) => w.kind === "team").length} складов бригад`} />
+        <Stat label="Серийных единиц" value={totalUnits} hint="свободных на всех складах" />
+        <Stat label="В резерве" value={totalReserved} />
+        <Stat label="Позиций материалов" value={whs.reduce((a, w) => a + w.materialItems, 0)} />
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4">
-          <InventoryOps items={items.map((i) => ({ id: i.id, sku: i.sku, name: i.name, unit: i.unit, isSerialized: i.isSerialized }))} units={freeUnits.map((u) => ({ id: u.id, name: u.name, serialNumber: u.serialNumber }))} balances={stock.balances.map((b) => ({ catalogItemId: b.catalogItemId, name: b.name, unit: b.unit, quantity: b.quantity }))} teams={teams.filter((t) => t.isActive).map((t) => ({ id: t.id, name: t.name }))} perms={perms} />
-          <Card title="Остатки у бригад">
-            <ul className="divide-y divide-slate-100 text-sm">{summary.map((s) => <li key={s.teamId} className="flex items-center justify-between py-2"><Link href={`/teams/${s.teamId}`} className="font-medium text-indigo-700">{s.teamName}</Link><span className="text-xs text-slate-500">{s.unitsAtTeam} ед. · {s.unitsReserved} резерв · {s.materialItems} поз.</span></li>)}</ul>
-          </Card>
-        </div>
-        <div className="lg:col-span-2"><StockView stock={stock} title="Серийное оборудование на складе" /></div>
-      </div>
+      {current ? (
+        <WarehouseWorkspace
+          warehouses={whs.map((w) => ({ id: w.id, name: w.name, kind: w.kind, teamId: w.teamId, materialItems: w.materialItems, unitsFree: w.unitsFree, unitsReserved: w.unitsReserved }))}
+          initialWarehouseId={current.id}
+          initialStock={{
+            balances: stock.balances,
+            units: stock.units.map((u) => ({ ...u, receiptDate: u.receiptDate ? u.receiptDate.toISOString() : null })),
+            reservations: stock.reservations,
+          }}
+          items={items}
+          perms={perms}
+        />
+      ) : (
+        <p className="text-sm text-slate-500">Склады не настроены.</p>
+      )}
     </div>
   );
 }

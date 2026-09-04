@@ -1,3 +1,4 @@
+import { ensureWarehouses } from "@/lib/services/warehouses";
 import { db } from "@/db";
 import { teams } from "@/db/schema";
 import { ok, withAuth, parseBody } from "@/lib/api";
@@ -9,5 +10,6 @@ export const GET = withAuth(async () => ok(await listTeamsWithDetails()), ["team
 export const POST = withAuth(async (req) => {
   const b = await parseBody(req, teamCreateSchema);
   const [t] = await db.insert(teams).values(b).returning();
+  await ensureWarehouses(true); // склад бригады
   return ok(t, { status: 201 });
 }, ["teams.manage"]);

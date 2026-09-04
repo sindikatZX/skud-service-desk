@@ -103,8 +103,11 @@ export const vehicleAssignSchema = z.object({ vehicleId: id });
 // ─────────────────────────── НОМЕНКЛАТУРА ───────────────────────────
 
 export const catalogCreateSchema = z.object({
-  sku: name(60),
+  /** Артикул не обязателен: при импорте из 1С берётся из таблицы, иначе генерируется. */
+  sku: trimmed(60).optional().transform((v) => (v ? v : undefined)),
   name: name(200),
+  externalCode: optionalText(60),
+  fullName: optionalText(500),
   categoryId: id,
   unit: name(20).default("шт"),
   isSerialized: z.boolean().optional().default(false),
@@ -114,6 +117,8 @@ export const catalogCreateSchema = z.object({
 export const catalogUpdateSchema = z.object({
   sku: name(60).optional(),
   name: name(200).optional(),
+  externalCode: optionalText(60),
+  fullName: optionalText(500),
   categoryId: id.optional(),
   unit: name(20).optional(),
   isSerialized: z.boolean().optional(),
@@ -244,6 +249,51 @@ export const writeOffSchema = z
   })
   .refine((v) => v.catalogItemId || v.unitId, { message: "укажите номенклатуру или единицу", path: ["catalogItemId"] });
 
+const docLine = z.object({
+  catalogItemId: optionalId,
+  quantity: z.coerce.number().positive().max(1_000_000).optional(),
+  units: z.array(z.object({ serialNumber: name(120), macAddress: optionalText(60) })).optional(),
+  unitIds: z.array(id).optional(),
+  price: z.coerce.number().min(0).max(1e9).nullish(),
+  note: optionalText(300),
+});
+
+export const receiptDocSchema = z.object({
+  toWarehouseId: optionalId,
+  number: optionalText(40),
+  externalNumber: optionalText(80),
+  docDate: dateish,
+  supplier: optionalText(200),
+  note: optionalText(500),
+  lines: z.array(docLine).min(1, "добавьте позиции"),
+});
+
+export const transferDocSchema = z.object({
+  fromWarehouseId: id,
+  toWarehouseId: id,
+  number: optionalText(40),
+  docDate: dateish,
+  note: optionalText(500),
+  lines: z.array(docLine).min(1, "добавьте позиции"),
+});
+
+export const writeOffDocSchema = z.object({
+  fromWarehouseId: optionalId,
+  number: optionalText(40),
+  docDate: dateish,
+  note: optionalText(500),
+  lines: z.array(docLine).min(1, "добавьте позиции"),
+});
+
+export const documentsQuerySchema = z.object({
+  type: z.string().trim().optional(),
+  warehouseId: z.coerce.number().int().positive().optional(),
+  from: dateish,
+  to: dateish,
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
+});
+
 export const unitUpdateSchema = z.object({
   macAddress: optionalText(60),
   notes: optionalText(500),
@@ -262,6 +312,7 @@ export const transactionsQuerySchema = z.object({
 export const stockQuerySchema = z.object({
   locationType: z.enum(["warehouse", "team"]).optional(),
   teamId: z.coerce.number().int().min(0).optional(),
+  warehouseId: z.coerce.number().int().min(0).optional(),
 });
 
 // ─────────────────────────── СПРАВОЧНИКИ ───────────────────────────
@@ -283,8 +334,56 @@ export const priorityCreateSchema = z.object({
 });
 export const priorityUpdateSchema = priorityCreateSchema.partial();
 
-export const categoryCreateSchema = z.object(dictBase);
+export const categoryCreateSchema = z.object({ ...dictBase, parentId: optionalId });
 export const categoryUpdateSchema = categoryCreateSchema.partial();
+
+export const workCatalogCreateSchema = z.object({
+  ...dictBase,
+  unit: trimmed(20).optional(),
+  defaultMinutes: z.coerce.number().int().min(0).max(100000).nullish(),
+  price: z.coerce.number().min(0).max(1e9).nullish(),
+});
+export const workCatalogUpdateSchema = workCatalogCreateSchema.partial();
+
+export const warehouseCreateSchema = z.object({
+  ...dictBase,
+  kind: z.enum(["central", "transit", "team", "other"]).optional(),
+  address: optionalText(300),
+});
+export const warehouseUpdateSchema = warehouseCreateSchema.partial();
+
+/** Массовые действия над номенклатурой (галочки в списке). */
+export const catalogBulkSchema = z.object({
+  ids: z.array(id).min(1, "выберите позиции"),
+  action: z.enum(["activate", "deactivate", "move", "delete"]),
+  categoryId: optionalId,
+});
+
+/** Самостоятельное изменение учётной записи (без роли). */
+export const profileUpdateSchema = z
+  .object({
+    fullName: name(200).optional(),
+    /** undefined — поле не трогаем; пустая строка — очистить. */
+    phone: z
+      .string()
+      .trim()
+      .max(50)
+      .nullable()
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v ? v : null)),
+    email: z.string().trim().email("некорректный email").toLowerCase().optional(),
+    currentPassword: z.string().optional(),
+    newPassword: z.string().min(6, "минимум 6 символов").optional(),
+  })
+  .refine((v) => !v.newPassword || v.currentPassword, { message: "укажите текущий пароль", path: ["currentPassword"] })
+  .refine((v) => !v.email || v.currentPassword, { message: "для смены логина укажите текущий пароль", path: ["currentPassword"] });
+
+/** Импорт CSV: строки уже разобраны на клиенте в объекты «колонка → значение». */
+export const importSchema = z.object({
+  rows: z.array(z.record(z.string(), z.string().max(2000))).min(1, "файл пуст").max(20000, "не более 20 000 строк за раз"),
+  mapping: z.record(z.string(), z.string()).optional(),
+  options: z.record(z.string(), z.union([z.string(), z.boolean(), z.number()])).optional(),
+});
 
 export const measureUnitCreateSchema = z.object({
   ...dictBase,

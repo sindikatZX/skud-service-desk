@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/page-auth";
 import { PageHeader } from "@/components/ui";
-import { listTicketTypes, listPriorities, listCategories, listMeasureUnits } from "@/lib/services/directories";
+import { listTicketTypes, listPriorities, listCategories, listMeasureUnits, listWorkCatalog, listWarehousesDict } from "@/lib/services/directories";
+import { WAREHOUSE_KIND_LABELS } from "@/lib/labels";
 import { DirectoryManager, type DictField, type DictRow } from "../DirectoryManager";
 
 export const dynamic = "force-dynamic";
@@ -16,13 +17,17 @@ const DICTS: Record<
     usageLabel: string;
     codeHint?: string;
     extraFields?: DictField[];
+    importEntity?: string;
     load: () => Promise<DictRow[]>;
+    /** Динамические поля (зависят от данных). */
+    fieldsFor?: (rows: DictRow[]) => DictField[];
   }
 > = {
   "ticket-types": {
     title: "Типы работ",
     subtitle: "Подставляются в поле «Тип работ» при создании и редактировании заявки",
     usageLabel: "Заявок",
+    importEntity: "ticket-types",
     load: () => listTicketTypes() as Promise<DictRow[]>,
   },
   priorities: {
@@ -33,19 +38,49 @@ const DICTS: Record<
       { name: "slaHours", label: "SLA, часов", type: "number", hint: "срок по умолчанию от момента создания" },
       { name: "colorClass", label: "CSS-классы подсветки", placeholder: "text-rose-600 font-bold", hint: "классы Tailwind для выделения в списках" },
     ],
+    importEntity: "priorities",
     load: () => listPriorities() as Promise<DictRow[]>,
   },
   categories: {
-    title: "Категории оборудования",
-    subtitle: "Группировка номенклатуры на складе и в отчётах",
+    title: "Категории (папки номенклатуры)",
+    subtitle: "Иерархические группы номенклатуры, как в 1С: папка может быть вложена в другую",
     usageLabel: "Позиций",
+    importEntity: "categories",
     load: () => listCategories() as Promise<DictRow[]>,
+    fieldsFor: (rows) => {
+      const path = (id: number | null): string => { const c = rows.find((r) => r.id === id); if (!c) return ""; const p = path((c.parentId as number | null) ?? null); return p ? `${p} / ${c.name}` : c.name; };
+      return [{ name: "parentId", label: "Родительская папка", type: "select", numeric: true, nullable: true, options: rows.map((r) => ({ value: r.id, label: path(r.id) })).sort((a, b) => a.label.localeCompare(b.label, "ru")) }];
+    },
+  },
+  works: {
+    title: "Справочник работ",
+    subtitle: "Виды работ/услуг — подставляются в акт выполненных работ по заявке",
+    usageLabel: "В актах",
+    importEntity: "works",
+    extraFields: [
+      { name: "unit", label: "Ед. изм.", placeholder: "шт" },
+      { name: "defaultMinutes", label: "Норматив, мин", type: "number" },
+      { name: "price", label: "Цена", type: "number" },
+    ],
+    load: () => listWorkCatalog() as unknown as Promise<DictRow[]>,
+  },
+  warehouses: {
+    title: "Склады",
+    subtitle: "Центральный, транзитный и склады бригад создаются автоматически; добавляйте дополнительные склады",
+    usageLabel: "Позиций/единиц",
+    importEntity: "warehouses",
+    extraFields: [
+      { name: "kind", label: "Вид склада", type: "select", options: Object.entries(WAREHOUSE_KIND_LABELS).filter(([k]) => k !== "team" && k !== "central").map(([value, label]) => ({ value, label })) },
+      { name: "address", label: "Адрес" },
+    ],
+    load: () => listWarehousesDict() as unknown as Promise<DictRow[]>,
   },
   "measure-units": {
     title: "Единицы измерения",
     subtitle: "Используются в номенклатуре и в актах выполненных работ",
     usageLabel: "Позиций",
     codeHint: "как показывается в интерфейсе: шт, м, компл",
+    importEntity: "measure-units",
     load: () => listMeasureUnits() as Promise<DictRow[]>,
   },
 };
@@ -67,9 +102,10 @@ export default async function DictionaryPage({ params }: { params: Promise<{ dic
       <DirectoryManager
         dict={dict}
         rows={rows}
-        extraFields={spec.extraFields}
+        extraFields={[...(spec.extraFields ?? []), ...(spec.fieldsFor?.(rows) ?? [])]}
         usageLabel={spec.usageLabel}
         codeHint={spec.codeHint}
+        importEntity={spec.importEntity}
       />
     </div>
   );

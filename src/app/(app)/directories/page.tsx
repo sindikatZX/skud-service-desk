@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/page-auth";
 import { PageHeader, Card } from "@/components/ui";
-import { listTicketTypes, listPriorities, listCategories, listMeasureUnits, listRoles } from "@/lib/services/directories";
+import { listTicketTypes, listPriorities, listCategories, listMeasureUnits, listRoles, listWorkCatalog, listWarehousesDict } from "@/lib/services/directories";
+import { db } from "@/db";
+import { sites, catalogItems, clients } from "@/db/schema";
+import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export default async function DirectoriesPage() {
   await requireUser(["directories.manage"]);
-  const [types, priorities, categories, units, roles] = await Promise.all([
-    listTicketTypes(), listPriorities(), listCategories(), listMeasureUnits(), listRoles(),
+  const [types, priorities, categories, units, roles, works, whs, [{ n: sitesN }], [{ n: itemsN }], [{ n: clientsN }]] = await Promise.all([
+    listTicketTypes(), listPriorities(), listCategories(), listMeasureUnits(), listRoles(), listWorkCatalog(), listWarehousesDict(),
+    db.select({ n: sql<number>`count(*)::int` }).from(sites),
+    db.select({ n: sql<number>`count(*)::int` }).from(catalogItems),
+    db.select({ n: sql<number>`count(*)::int` }).from(clients),
   ]);
 
   const sections = [
@@ -16,6 +22,11 @@ export default async function DirectoriesPage() {
     { href: "/directories/priorities", title: "Приоритеты и SLA", icon: "⏱", count: priorities.length, text: "Приоритеты заявок и срок исполнения в часах по умолчанию." },
     { href: "/directories/categories", title: "Категории оборудования", icon: "📦", count: categories.length, text: "Группировка номенклатуры: камеры, контроллеры, кабель…" },
     { href: "/directories/measure-units", title: "Единицы измерения", icon: "📏", count: units.length, text: "шт, м, комплект — используются в номенклатуре и работах." },
+    { href: "/directories/works", title: "Справочник работ", icon: "🧰", count: works.length, text: "Виды работ и услуг с нормативом времени и ценой — для актов по заявкам." },
+    { href: "/directories/warehouses", title: "Склады", icon: "🏭", count: whs.length, text: "Центральный, транзитный, склады бригад и дополнительные склады." },
+    { href: "/catalog", title: "Справочник материалов (номенклатура)", icon: "🧱", count: itemsN, text: "Иерархический каталог оборудования и материалов, импорт из 1С." },
+    { href: "/directories/sites", title: "Справочник объектов", icon: "📍", count: sitesN, text: "Все объекты обслуживания по клиентам, импорт из CSV." },
+    { href: "/clients", title: "Клиенты", icon: "🏢", count: clientsN, text: "Контрагенты и их объекты." },
     { href: "/directories/roles", title: "Роли и права", icon: "🔑", count: roles.length, text: "Наборы прав и область видимости данных для сотрудников." },
   ];
 

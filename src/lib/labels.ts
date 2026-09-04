@@ -20,8 +20,16 @@ export const UNIT_STATUS_COLORS: Record<string, string> = {
 };
 export const TX_LABELS: Record<string, string> = {
   receive: "Поступление", issue_to_team: "Отгрузка бригаде", return_to_warehouse: "Возврат на склад", reserve: "Резерв",
-  unreserve: "Снятие резерва", install: "Установка", write_off: "Списание",
+  unreserve: "Снятие резерва", install: "Установка", write_off: "Списание", transfer: "Перемещение",
 };
+export const DOC_TYPE_LABELS: Record<string, string> = { receipt: "Поступление", transfer: "Перемещение", writeoff: "Списание" };
+export const DOC_PREFIX: Record<string, string> = { receipt: "ПН", transfer: "ПМ", writeoff: "СП" };
+export const WAREHOUSE_KIND_LABELS: Record<string, string> = { central: "Центральный", transit: "Транзитный", team: "Склад бригады", other: "Прочий" };
+export function fmtBytes(n: number) {
+  if (n < 1024) return `${n} Б`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;
+  return `${(n / 1024 / 1024).toFixed(1)} МБ`;
+}
 export const LOC_LABELS: Record<string, string> = { warehouse: "Склад", team: "Бригада", site: "Объект" };
 
 export function fmtDate(d: Date | string | null | undefined, withTime = true) {

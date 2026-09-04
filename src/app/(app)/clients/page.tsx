@@ -5,6 +5,7 @@ import { sql, asc } from "drizzle-orm";
 import { requireUser } from "@/lib/page-auth";
 import { can } from "@/lib/rbac";
 import { Card, PageHeader, Table, Td } from "@/components/ui";
+import { CsvImport } from "@/components/CsvImport";
 import { QuickForm, ActionButton } from "@/components/QuickForm";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export default async function ClientsPage() {
     .from(clients).orderBy(asc(clients.name));
   return (
     <div>
-      <PageHeader title="Клиенты" subtitle={`${rows.length} клиентов`} action={can(user, "clients.manage") ? <QuickForm collapsible title="+ Новый клиент" endpoint="/clients" submitLabel="Создать" fields={[{ name: "name", label: "Название", required: true }, { name: "inn", label: "ИНН" }, { name: "contactPerson", label: "Контактное лицо" }, { name: "phone", label: "Телефон" }, { name: "email", label: "Email", type: "email" }, { name: "notes", label: "Примечание", type: "textarea" }]} /> : null} />
+      <PageHeader title="Клиенты" subtitle={`${rows.length} клиентов`} action={can(user, "clients.manage") ? <div className="flex flex-wrap items-start gap-2"><CsvImport entity="clients" compact /><QuickForm collapsible title="+ Новый клиент" endpoint="/clients" submitLabel="Создать" fields={[{ name: "name", label: "Название", required: true }, { name: "inn", label: "ИНН" }, { name: "contactPerson", label: "Контактное лицо" }, { name: "phone", label: "Телефон" }, { name: "email", label: "Email", type: "email" }, { name: "notes", label: "Примечание", type: "textarea" }]} /></div> : null} />
       <Card>
         <Table head={["Клиент", "Контакт", "Объекты", "Заявки (откр./всего)", ""]} empty={!rows.length}>
           {rows.map((c) => (

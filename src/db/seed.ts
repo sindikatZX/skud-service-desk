@@ -7,6 +7,7 @@ import { sql, eq, asc } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth";
 import { receive, issueToTeam, reserve, install } from "@/lib/services/inventory";
 import { SYSTEM_ROLES } from "@/lib/rbac";
+import { ensureWarehouses } from "@/lib/services/warehouses";
 
 /** Системные записи справочников: создаются при первом запуске и защищены от удаления. */
 const SYSTEM_TICKET_TYPES = [
@@ -58,6 +59,13 @@ export async function ensureSystemDirectories() {
   await db.insert(ticketPriorities).values(SYSTEM_PRIORITIES.map((p) => ({ ...p, isSystem: true }))).onConflictDoNothing({ target: ticketPriorities.code });
   await db.insert(catalogCategories).values(SYSTEM_CATEGORIES.map((c) => ({ ...c, isSystem: true }))).onConflictDoNothing({ target: catalogCategories.code });
   await db.insert(measureUnits).values(SYSTEM_UNITS.map((u) => ({ ...u, isSystem: true }))).onConflictDoNothing({ target: measureUnits.code });
+  // Новые права у системных ролей (появившиеся после обновления) — добавляем, не трогая пользовательские настройки.
+  for (const r of SYSTEM_ROLES) {
+    const extra = r.permissions.filter((p) => ["tickets.reopen", "inventory.transfer", "data.import"].includes(p));
+    if (!extra.length) continue;
+    await db.execute(sql`update roles set permissions = (select array(select distinct unnest(permissions || ${sql.raw(`ARRAY[${extra.map((e) => `'${e}'`).join(",")}]::text[]`)}))) where code = ${r.code} and is_system = true`);
+  }
+  await ensureWarehouses(true);
 }
 
 /** Словарь «код → id» для справочника. */
@@ -108,6 +116,7 @@ export async function seedIfEmpty() {
     { name: "Бригада №1", description: "СКУД и видеонаблюдение, север города" },
     { name: "Бригада №2", description: "Видеонаблюдение, юг города" },
   ]).returning();
+  await ensureWarehouses(true);
   await db.insert(teamMembers).values([
     { teamId: team1.id, userId: t1.id, isLead: true }, { teamId: team1.id, userId: t2.id },
     { teamId: team2.id, userId: t3.id, isLead: true }, { teamId: team2.id, userId: t4.id },

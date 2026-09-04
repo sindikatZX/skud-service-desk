@@ -25,6 +25,7 @@ export type Permission =
   | "tickets.close"
   | "tickets.cancel"
   | "tickets.delete"
+  | "tickets.reopen"
   | "chat.write"
   | "chat.internal"
   | "inventory.read.all"
@@ -35,6 +36,8 @@ export type Permission =
   | "inventory.reserve"
   | "inventory.install"
   | "inventory.writeoff"
+  | "inventory.transfer"
+  | "data.import"
   | "reports.view"
   | "reports.inventory";
 
@@ -52,6 +55,7 @@ export const PERMISSION_GROUPS: { group: string; items: { key: Permission; label
       { key: "tickets.close", label: "Закрывать заявки" },
       { key: "tickets.cancel", label: "Отменять заявки" },
       { key: "tickets.delete", label: "Удалять заявки" },
+      { key: "tickets.reopen", label: "Возвращать в работу закрытые заявки" },
     ],
   },
   {
@@ -88,6 +92,7 @@ export const PERMISSION_GROUPS: { group: string; items: { key: Permission; label
       { key: "inventory.reserve", label: "Резервировать под заявку" },
       { key: "inventory.install", label: "Проводить установку на объекте" },
       { key: "inventory.writeoff", label: "Списывать" },
+      { key: "inventory.transfer", label: "Перемещать между складами" },
     ],
   },
   {
@@ -97,6 +102,7 @@ export const PERMISSION_GROUPS: { group: string; items: { key: Permission; label
       { key: "catalog.manage", label: "Управление номенклатурой" },
       { key: "directories.manage", label: "Управление справочниками (типы работ, роли, категории…)" },
       { key: "users.manage", label: "Управление сотрудниками" },
+      { key: "data.import", label: "Импорт справочников из CSV (1С)" },
     ],
   },
   {
@@ -126,6 +132,20 @@ export type PermissionHolder = { permissions: Permission[]; scope: RoleScope };
 
 export function can(user: PermissionHolder, perm: Permission): boolean {
   return user.permissions.includes(perm);
+}
+
+/**
+ * Права, появившиеся в новых версиях. У ролей, сохранённых в БД до обновления,
+ * их нет в массиве permissions — администратору они доверяются неявно, а
+ * роль «Склад» получает складские новинки; остальным их выдаёт админ в справочнике ролей.
+ */
+const IMPLIED: Partial<Record<string, Permission[]>> = {
+  admin: ["tickets.reopen", "inventory.transfer", "data.import"],
+  warehouse: ["inventory.transfer", "data.import"],
+};
+export function canWithRole(user: PermissionHolder & { role?: string }, perm: Permission): boolean {
+  if (can(user, perm)) return true;
+  return Boolean(user.role && IMPLIED[user.role]?.includes(perm));
 }
 
 export function canAny(user: PermissionHolder, perms: Permission[]): boolean {
@@ -190,7 +210,7 @@ export const SYSTEM_ROLES: {
     permissions: [
       "teams.read", "catalog.read", "catalog.manage", "tickets.read.all", "chat.write", "chat.internal",
       "inventory.read.all", "inventory.receive", "inventory.issue", "inventory.return", "inventory.reserve",
-      "inventory.writeoff", "reports.inventory",
+      "inventory.writeoff", "inventory.transfer", "data.import", "reports.inventory",
     ],
   },
   {

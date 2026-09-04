@@ -15,7 +15,7 @@ import {
 import { and, eq, desc, inArray, sql, isNull, or, lt, notInArray, asc } from "drizzle-orm";
 import { conflict, forbidden, notFound } from "@/lib/api";
 import type { SessionUser } from "@/lib/auth";
-import { can } from "@/lib/rbac";
+import { can, canWithRole } from "@/lib/rbac";
 
 /** Допустимые переходы статусов (см. docs/07-business-processes.md). */
 export const TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
@@ -25,9 +25,16 @@ export const TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   in_progress: ["done", "on_hold", "cancelled"],
   on_hold: ["in_progress", "scheduled", "cancelled"],
   done: ["closed", "in_progress"],
-  closed: [],
+  // Закрытую заявку может вернуть в работу только роль с правом tickets.reopen (администратор).
+  closed: ["in_progress", "assigned"],
   cancelled: ["new"],
 };
+
+/** Переходы, требующие отдельного права в зависимости от исходного статуса. */
+const REOPEN_FROM: TicketStatus[] = ["closed"];
+export function canReopen(u: SessionUser) {
+  return canWithRole(u, "tickets.reopen");
+}
 
 export const STATUS_LABELS: Record<TicketStatus, string> = {
   new: "Новая",
@@ -179,6 +186,7 @@ export async function getTicketDetails(user: SessionUser, id: number) {
 }
 
 export function allowedFor(user: SessionUser, status: TicketStatus): TicketStatus[] {
+  if (REOPEN_FROM.includes(status)) return canReopen(user) ? TRANSITIONS[status] : [];
   return TRANSITIONS[status].filter((s) => TRANSITION_PERMS[s]?.(user) ?? false);
 }
 
@@ -297,14 +305,18 @@ export async function updateTicket(
  * поэтому два одновременных перехода не могут разойтись с историей статусов.
  */
 export async function changeStatus(user: SessionUser, id: number, to: TicketStatus, comment?: string | null) {
-  await getTicket(user, id); // проверка доступа по области видимости роли
-  if (!(TRANSITION_PERMS[to]?.(user) ?? false)) throw forbidden("Ваша роль не может выполнить этот переход");
+  const current = await getTicket(user, id); // проверка доступа по области видимости роли
+  const reopening = REOPEN_FROM.includes(current.status);
+  if (reopening) {
+    if (!canReopen(user)) throw forbidden("Вернуть закрытую заявку в работу может только администратор");
+  } else if (!(TRANSITION_PERMS[to]?.(user) ?? false)) throw forbidden("Ваша роль не может выполнить этот переход");
 
   return db.transaction(async (tx) => {
     const [t] = await tx.select().from(tickets).where(eq(tickets.id, id)).for("update");
     if (!t) throw notFound("Заявка не найдена");
     // Проверки выполняются уже под блокировкой — на актуальном статусе.
     if (!TRANSITIONS[t.status].includes(to)) throw conflict(`Переход ${STATUS_LABELS[t.status]} → ${STATUS_LABELS[to]} недопустим`);
+    if (REOPEN_FROM.includes(t.status) && !canReopen(user)) throw forbidden("Вернуть закрытую заявку в работу может только администратор");
     if (["assigned", "scheduled", "in_progress"].includes(to) && !t.teamId) throw conflict("Сначала назначьте бригаду");
     if (user.scope === "team" && t.teamId !== user.teamId) throw forbidden("Заявка не назначена вашей бригаде");
 
@@ -314,6 +326,11 @@ export async function changeStatus(user: SessionUser, id: number, to: TicketStat
     if (to === "done") set.completedAt = now;
     if (to === "closed") set.closedAt = now;
     if (to === "done" && comment) set.resultNote = comment;
+    if (REOPEN_FROM.includes(t.status)) {
+      // Возврат в работу: снимаем отметки о закрытии, история сохраняет факт повторного открытия.
+      set.closedAt = null;
+      set.completedAt = null;
+    }
 
     await tx.update(tickets).set(set).where(eq(tickets.id, id));
     await tx.insert(ticketStatusHistory).values({ ticketId: id, fromStatus: t.status, toStatus: to, actorId: user.id, comment });
