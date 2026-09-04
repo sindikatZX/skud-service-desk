@@ -2,7 +2,8 @@
  * Service Worker СКУД•Сервис.
  *
  * Стратегии:
- *  - /_next/static, /icons, шрифты      → cache-first (контент иммутабельный)
+ *  - /_next/static, /icons, шрифты      → cache-first (в production пути содержат хеш
+ *    сборки и неизменны; в dev воркер не регистрируется — см. PwaProvider)
  *  - навигация (HTML)                    → network-first с таймаутом, fallback: кэш → /offline
  *  - GET /api/v1/*                        → network-first, последний успешный ответ хранится для офлайн-просмотра
  *  - POST/PATCH/DELETE                    → всегда сеть; при офлайне — понятная JSON-ошибка

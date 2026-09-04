@@ -35,6 +35,17 @@ export function PwaProvider() {
   // ── Service worker ──────────────────────────────────────────────
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
+
+    // В разработке service worker не регистрируем: он кэширует /_next/static по
+    // стратегии cache-first, а dev-сборка переиспользует пути чанков — браузер
+    // начинал выполнять устаревший JS. Заодно снимаем воркер, установленный ранее,
+    // и чистим его кэши, чтобы «залипший» браузер восстановился сам.
+    if (process.env.NODE_ENV !== "production") {
+      navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister())).catch(() => {});
+      if (typeof caches !== "undefined") caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
+      return;
+    }
+
     let refreshing = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (refreshing) return;
