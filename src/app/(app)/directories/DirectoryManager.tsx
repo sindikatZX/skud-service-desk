@@ -49,7 +49,8 @@ type Props = {
 
 /**
  * Универсальный экран справочника: добавление, переименование, включение/отключение
- * и удаление записей. Системные записи можно менять, но не удалять.
+ * и удаление записей. Предустановленные (демонстрационные) записи редактируются и удаляются
+ * наравне с остальными — сервер отклонит удаление только при наличии ссылок из документов.
  */
 export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, codeHint, importEntity }: Props) {
   const router = useRouter();
@@ -97,8 +98,8 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
           placeholder="генерируется автоматически"
         />
       </Field>
-      <Field label="Название">
-        <input name="name" className={inputCls} required defaultValue={row?.name ?? ""} placeholder="Ремонт" />
+      <Field label="Название" hint={row?.kind === "vehicle" ? "склад-автомобиль: название = модель · госномер, меняется в автопарке" : undefined}>
+        <input name="name" className={inputCls} required defaultValue={row?.name ?? ""} placeholder="Ремонт" readOnly={row?.kind === "vehicle"} />
       </Field>
       {extraFields.map((f) => (
         <Field key={f.name} label={f.label} hint={f.hint}>
@@ -177,7 +178,7 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
               <Td><span className="font-mono text-xs">{r.code}</span></Td>
               <Td>
                 <span className="font-medium">{r.name}</span>
-                {r.isSystem && <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">системная</span>}
+                {r.isSystem && <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400" title="Создана при первом запуске; редактируется и удаляется как обычная">предустановленная</span>}
               </Td>
               {extraFields.map((f) => {
                 const v = r[f.name] as string | number | null;
@@ -189,20 +190,16 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
               <Td>
                 <div className="flex items-center gap-3">
                   <button className="text-xs text-indigo-600 hover:underline" onClick={() => { setEditing(r.id); setAdding(false); }}>изменить</button>
-                  {r.isSystem ? (
-                    <span className="text-xs text-slate-300" title="Системную запись можно отключить, но не удалить">удалить</span>
-                  ) : (
-                    <button
-                      className="text-xs text-rose-600 hover:underline disabled:opacity-50"
-                      disabled={busy}
-                      onClick={() => {
-                        if (!window.confirm(`Удалить «${r.name}»?${r.usedBy ? `\n\nЗапись используется ${r.usedBy} раз — удаление будет отклонено.` : ""}`)) return;
-                        run(() => api(`/directories/${dict}/${r.id}`, { method: "DELETE" }), "Запись удалена");
-                      }}
-                    >
-                      удалить
-                    </button>
-                  )}
+                  <button
+                    className="text-xs text-rose-600 hover:underline disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => {
+                      if (!window.confirm(`Удалить «${r.name}»?${r.usedBy ? `\n\nЗапись используется ${r.usedBy} раз — удаление будет отклонено.` : ""}`)) return;
+                      run(() => api(`/directories/${dict}/${r.id}`, { method: "DELETE" }), "Запись удалена");
+                    }}
+                  >
+                    удалить
+                  </button>
                 </div>
               </Td>
             </tr>

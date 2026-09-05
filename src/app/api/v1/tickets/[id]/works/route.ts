@@ -7,6 +7,7 @@ export const POST = withAuth(async (req, { user, params }) => {
   return ok(
     await addWork(user, parseId(params), {
       description: b.description,
+      workCatalogId: b.workCatalogId ?? null,
       quantity: b.quantity ?? 1,
       unit: b.unit ?? "шт",
       durationMinutes: b.durationMinutes ?? null,

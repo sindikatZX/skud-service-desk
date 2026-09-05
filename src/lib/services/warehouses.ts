@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { warehouses, teams, vehicles, vehicleAssignments, stockBalances, equipmentUnits, stockReservations, type Warehouse } from "@/db/schema";
+import { warehouses, teams, vehicles, vehicleAssignments, stockBalances, equipmentUnits, stockReservations, systemRowTombstones, type Warehouse } from "@/db/schema";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { conflict, notFound } from "@/lib/api";
 import { nextCode, resolveCode } from "@/lib/codes";
@@ -33,10 +33,12 @@ export async function ensureWarehouses(force = false) {
   if (!force && Date.now() - ensured < 60_000) return;
   // Коды генерируются, поэтому единственность базовых складов определяем по виду,
   // а не по коду: иначе каждый вызов заводил бы новый «Центральный склад».
+  const [transitDeleted] = await db.select({ id: systemRowTombstones.id }).from(systemRowTombstones).where(and(eq(systemRowTombstones.tableName, "warehouses"), eq(systemRowTombstones.sysKey, "transit")));
   for (const base of [
     { kind: "central" as const, name: "Центральный склад", sortOrder: 10 },
     { kind: "transit" as const, name: "Транзитный склад", sortOrder: 20 },
   ]) {
+    if (base.kind === "transit" && transitDeleted) continue; // удалён пользователем — не воссоздаём
     const [exists] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.kind, base.kind)).limit(1);
     if (!exists) await db.insert(warehouses).values({ ...base, code: await nextCode("warehouses"), isSystem: true });
   }
@@ -311,10 +313,13 @@ export async function updateWarehouse(id: number, patch: { code?: string; name?:
 
 export async function deleteWarehouse(id: number) {
   const w = await getWarehouse(id);
-  if (w.isSystem) throw conflict("Системный склад (центральный, транзитный, склад-автомобиль) не удаляется. Склад-автомобиль исчезает вместе с автомобилем.");
+  if (w.kind === "central") throw conflict("Центральный склад — место хранения по умолчанию, он не удаляется. Его можно переименовать.");
+  if (w.kind === "vehicle") throw conflict("Склад-автомобиль ведётся автопарком и удаляется вместе с автомобилем.");
   const [b] = await db.select({ n: sql<number>`count(*)::int` }).from(stockBalances).where(and(eq(stockBalances.warehouseId, id), sql`${stockBalances.quantity} > 0`));
   const [u] = await db.select({ n: sql<number>`count(*)::int` }).from(equipmentUnits).where(and(eq(equipmentUnits.warehouseId, id), sql`${equipmentUnits.status} in ('in_warehouse','reserved')`));
   const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(stockReservations).where(and(eq(stockReservations.warehouseId, id), eq(stockReservations.status, "active")));
   if (b.n + u.n + r.n > 0) throw conflict("На складе есть остатки или резервы. Сначала переместите их на другой склад.");
+  // Транзитный склад создаётся автоматически — запоминаем, что пользователь его удалил
+  if (w.kind === "transit") await db.insert(systemRowTombstones).values({ tableName: "warehouses", sysKey: "transit" }).onConflictDoNothing();
   await db.delete(warehouses).where(eq(warehouses.id, id));
 }

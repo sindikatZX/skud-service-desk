@@ -10,6 +10,7 @@ import {
   catalogItems,
   workCatalog,
   ticketWorks,
+  systemRowTombstones,
 } from "@/db/schema";
 import { listWarehousesWithUsage, createWarehouse, updateWarehouse, deleteWarehouse } from "@/lib/services/warehouses";
 import { asc, eq, sql } from "drizzle-orm";
@@ -22,11 +23,24 @@ import { resolveCode } from "@/lib/codes";
  * Всё редактируется в разделе «Справочники» и подставляется в формы вместо
  * зашитых в код списков.
  *
- * Системные записи (isSystem) переименовываются и настраиваются, но не удаляются:
- * на их коды опирается первичная настройка системы.
+ * Предустановленные записи (isSystem) — это демонстрационный стартовый набор: их можно
+ * переименовывать, отключать и удалять наравне с пользовательскими (единственное
+ * ограничение — ссылки из документов). Чтобы удалённая запись не вернулась при
+ * следующем старте (ensureSystemDirectories досоздаёт отсутствующие), факт удаления
+ * запоминается в system_row_tombstones.
  */
 
-const SYSTEM_LOCKED = "Системная запись справочника не удаляется. Её можно переименовать или отключить (снять «Активна»).";
+/** Запомнить удаление предустановленной записи, чтобы она не была создана заново. */
+export async function rememberDeleted(tableName: string, sysKey: string | null | undefined) {
+  if (!sysKey) return;
+  await db.insert(systemRowTombstones).values({ tableName, sysKey }).onConflictDoNothing();
+}
+
+/** Ключи предустановленных записей, удалённых пользователем. */
+export async function deletedSystemKeys(tableName: string): Promise<Set<string>> {
+  const rows = await db.select({ k: systemRowTombstones.sysKey }).from(systemRowTombstones).where(eq(systemRowTombstones.tableName, tableName));
+  return new Set(rows.map((r) => r.k));
+}
 
 /**
  * Счётчики использования записей справочника.
@@ -90,7 +104,7 @@ export async function updateWorkCatalog(id: number, patch: { code?: string; name
 export async function deleteWorkCatalog(id: number) {
   const [row] = await db.select().from(workCatalog).where(eq(workCatalog.id, id));
   if (!row) throw notFound("Работа не найдена");
-  if (row.isSystem) throw conflict(SYSTEM_LOCKED);
+  // Ссылки из актов обнуляются (on delete set null): текст работы в акте сохраняется
   await db.delete(workCatalog).where(eq(workCatalog.id, id));
 }
 
@@ -137,9 +151,9 @@ export async function updateTicketType(id: number, patch: { code?: string; name?
 export async function deleteTicketType(id: number) {
   const [row] = await db.select().from(ticketTypes).where(eq(ticketTypes.id, id));
   if (!row) throw notFound("Тип работ не найден");
-  if (row.isSystem) throw conflict(SYSTEM_LOCKED);
   const [used] = await db.select({ n: sql<number>`count(*)::int` }).from(tickets).where(eq(tickets.typeId, id));
   if (used.n > 0) throw conflict(`Тип используют ${used.n} заявок. Переведите их на другой тип или отключите запись.`);
+  await rememberDeleted("ticket_types", row.sysKey);
   await db.delete(ticketTypes).where(eq(ticketTypes.id, id));
 }
 
@@ -182,9 +196,9 @@ export async function updatePriority(
 export async function deletePriority(id: number) {
   const [row] = await db.select().from(ticketPriorities).where(eq(ticketPriorities.id, id));
   if (!row) throw notFound("Приоритет не найден");
-  if (row.isSystem) throw conflict(SYSTEM_LOCKED);
   const [used] = await db.select({ n: sql<number>`count(*)::int` }).from(tickets).where(eq(tickets.priorityId, id));
   if (used.n > 0) throw conflict(`Приоритет используют ${used.n} заявок. Переведите их на другой приоритет или отключите запись.`);
+  await rememberDeleted("ticket_priorities", row.sysKey);
   await db.delete(ticketPriorities).where(eq(ticketPriorities.id, id));
 }
 
@@ -229,11 +243,11 @@ export async function updateCategory(id: number, patch: { code?: string; name?: 
 export async function deleteCategory(id: number) {
   const [row] = await db.select().from(catalogCategories).where(eq(catalogCategories.id, id));
   if (!row) throw notFound("Категория не найдена");
-  if (row.isSystem) throw conflict(SYSTEM_LOCKED);
   const [used] = await db.select({ n: sql<number>`count(*)::int` }).from(catalogItems).where(eq(catalogItems.categoryId, id));
   if (used.n > 0) throw conflict(`Категорию используют ${used.n} позиций номенклатуры. Переведите их в другую категорию или отключите запись.`);
   const [children] = await db.select({ n: sql<number>`count(*)::int` }).from(catalogCategories).where(eq(catalogCategories.parentId, id));
   if (children.n > 0) throw conflict(`В папке есть ${children.n} вложенных папок. Сначала удалите или перенесите их.`);
+  await rememberDeleted("catalog_categories", row.sysKey);
   await db.delete(catalogCategories).where(eq(catalogCategories.id, id));
 }
 
@@ -284,9 +298,11 @@ export async function updateMeasureUnit(id: number, patch: { code?: string; symb
 export async function deleteMeasureUnit(id: number) {
   const [row] = await db.select().from(measureUnits).where(eq(measureUnits.id, id));
   if (!row) throw notFound("Единица измерения не найдена");
-  if (row.isSystem) throw conflict(SYSTEM_LOCKED);
   const [used] = await db.select({ n: sql<number>`count(*)::int` }).from(catalogItems).where(eq(catalogItems.unit, row.symbol));
   if (used.n > 0) throw conflict(`Единицу используют ${used.n} товаров.`);
+  const [usedWorks] = await db.select({ n: sql<number>`count(*)::int` }).from(workCatalog).where(eq(workCatalog.unit, row.symbol));
+  if (usedWorks.n > 0) throw conflict(`Единицу используют ${usedWorks.n} записей справочника работ.`);
+  if (row.isSystem) await rememberDeleted("measure_units", row.symbol);
   await db.delete(measureUnits).where(eq(measureUnits.id, id));
 }
 
@@ -372,8 +388,16 @@ export async function updateRole(
 export async function deleteRole(id: number) {
   const [row] = await db.select().from(roles).where(eq(roles.id, id));
   if (!row) throw notFound("Роль не найдена");
-  if (row.isSystem) throw conflict(SYSTEM_LOCKED);
   const [used] = await db.select({ n: sql<number>`count(*)::int` }).from(users).where(eq(users.roleId, id));
   if (used.n > 0) throw conflict(`Роль назначена ${used.n} сотрудникам. Переведите их на другую роль перед удалением.`);
+  // Систему нельзя оставить без роли, управляющей сотрудниками
+  if (row.permissions.includes("users.manage")) {
+    const [others] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(roles)
+      .where(sql`'users.manage' = any(${roles.permissions}) and ${roles.id} <> ${id} and ${roles.isActive}`);
+    if ((others?.n ?? 0) === 0) throw conflict("Это единственная роль с правом «Управление сотрудниками» — удалить её нельзя");
+  }
+  await rememberDeleted("roles", row.sysKey);
   await db.delete(roles).where(eq(roles.id, id));
 }

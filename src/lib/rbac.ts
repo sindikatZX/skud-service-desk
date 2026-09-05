@@ -142,7 +142,7 @@ export const PERMISSION_GROUPS: { group: string; items: { key: Permission; label
  * у которых они предусмотрены в SYSTEM_ROLES (пользовательские настройки не трогаем).
  */
 export const ADDED_PERMISSIONS: Permission[] = [
-  "tickets.reopen", "inventory.transfer", "data.import", "data.export",
+  "directories.manage", "tickets.reopen", "inventory.transfer", "data.import", "data.export",
   "catalog.prices.view", "catalog.prices.manage",
   "reports.stock", "reports.movements", "reports.works", "reports.export",
   "admin.backup", "admin.maintenance",

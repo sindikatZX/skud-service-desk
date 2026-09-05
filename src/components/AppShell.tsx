@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SessionUser } from "@/lib/auth";
@@ -6,6 +5,8 @@ import { can, canAnyWithRole } from "@/lib/rbac";
 import type { IconName } from "@/components/icons";
 import { Icon } from "@/components/icons";
 import { NavLinks, BottomNav, MobileHeader, LogoutButton } from "@/components/NavClient";
+import { BrandLogo } from "@/components/BrandLogo";
+import type { Branding } from "@/lib/services/branding";
 
 export type NavItem = { href: string; label: string; icon: IconName; short?: string };
 
@@ -32,7 +33,7 @@ export function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
 }
 
-export function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
+export function AppShell({ user, branding, children }: { user: SessionUser; branding: Branding; children: ReactNode }) {
   const items = navFor(user);
   const homeHref = user.scope === "client" ? "/tickets" : "/";
   const profile = { fullName: user.fullName, roleName: user.roleName, email: user.email, initials: initials(user.fullName) };
@@ -42,10 +43,10 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
       {/* ── Десктопная боковая панель ── */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-dvh">
         <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
-          <Image src="/icons/icon-192.png" alt="" width={36} height={36} unoptimized className="h-9 w-9 rounded-xl" />
-          <div>
-            <div className="text-base font-bold leading-tight tracking-tight text-indigo-700">СКУД•Сервис</div>
-            <div className="text-[11px] text-slate-500">Service Desk / FSM</div>
+          <BrandLogo src={branding.logoDataUrl} size={36} className="shrink-0 rounded-xl" />
+          <div className="min-w-0">
+            <div className="truncate text-base font-bold leading-tight tracking-tight text-indigo-700">{branding.appName}</div>
+            {branding.tagline && <div className="truncate text-[11px] text-slate-500">{branding.tagline}</div>}
           </div>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
@@ -67,7 +68,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
 
       <div className="flex min-h-dvh flex-1 flex-col">
         {/* ── Мобильная шапка ── */}
-        <MobileHeader homeHref={homeHref} profile={profile} />
+        <MobileHeader homeHref={homeHref} profile={profile} appName={branding.appName} logo={branding.logoDataUrl} />
 
         <main className="flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-4 sm:px-6 lg:pb-8">{children}</main>
 

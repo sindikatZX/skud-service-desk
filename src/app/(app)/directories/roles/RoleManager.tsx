@@ -149,7 +149,7 @@ export function RoleManager({ roles }: { roles: RoleRow[] }) {
             <tr key={r.id} className="hover:bg-slate-50">
               <Td><span className="font-mono text-xs">{r.code}</span></Td>
               <Td>
-                <div className="font-medium">{r.name}{r.isSystem && <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">системная</span>}</div>
+                <div className="font-medium">{r.name}{r.isSystem && <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400" title="Создана при первом запуске; редактируется и удаляется как обычная">предустановленная</span>}</div>
                 {r.description && <div className="text-xs text-slate-500">{r.description}</div>}
                 {r.isFieldStaff && <div className="text-[11px] text-indigo-600">полевой персонал</div>}
               </Td>
@@ -160,20 +160,16 @@ export function RoleManager({ roles }: { roles: RoleRow[] }) {
               <Td>
                 <div className="flex items-center gap-3">
                   <button className="text-xs text-indigo-600 hover:underline" onClick={() => setEditing(r)}>изменить</button>
-                  {r.isSystem ? (
-                    <span className="text-xs text-slate-300" title="Системную роль можно отключить, но не удалить">удалить</span>
-                  ) : (
-                    <button
-                      className="text-xs text-rose-600 hover:underline disabled:opacity-50"
-                      disabled={busy}
-                      onClick={() => {
-                        if (!window.confirm(`Удалить роль «${r.name}»?${r.usedBy ? `\n\nРоль назначена ${r.usedBy} сотрудникам — удаление будет отклонено.` : ""}`)) return;
-                        run(() => api(`/directories/roles/${r.id}`, { method: "DELETE" }), "Роль удалена");
-                      }}
-                    >
-                      удалить
-                    </button>
-                  )}
+                  <button
+                    className="text-xs text-rose-600 hover:underline disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => {
+                      if (!window.confirm(`Удалить роль «${r.name}»?${r.usedBy ? `\n\nРоль назначена ${r.usedBy} сотрудникам — удаление будет отклонено.` : ""}`)) return;
+                      run(() => api(`/directories/roles/${r.id}`, { method: "DELETE" }), "Роль удалена");
+                    }}
+                  >
+                    удалить
+                  </button>
                 </div>
               </Td>
             </tr>

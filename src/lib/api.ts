@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ZodType } from "zod";
 import { getCurrentUser, type SessionUser } from "@/lib/auth";
-import { can, type Permission } from "@/lib/rbac";
+import { canWithRole, type Permission } from "@/lib/rbac";
 
 export class ApiError extends Error {
   status: number;
@@ -51,7 +51,7 @@ export function withAuth(handler: Handler, perms: Permission[] = []) {
     try {
       const user = await getCurrentUser();
       if (!user) throw unauthorized();
-      if (perms.length && !perms.some((p) => can(user, p))) throw forbidden();
+      if (perms.length && !perms.some((p) => canWithRole(user, p))) throw forbidden();
       const params = (await ctx?.params) ?? {};
       return await handler(req, { user, params });
     } catch (e) {

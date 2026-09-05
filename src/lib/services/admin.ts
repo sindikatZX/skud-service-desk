@@ -226,7 +226,7 @@ const DIRECTORY_TABLES = ["ticket_types", "ticket_priorities", "catalog_categori
  * Сотрудники сохраняются (keepUsers) либо остаются только администраторы — систему
  * нельзя оставить без входа. Файлы вложений удаляются с диска.
  */
-export async function resetData(opts: { keepUsers: boolean; backupFirst: boolean; userId?: number }) {
+export async function resetData(opts: { keepUsers: boolean; backupFirst: boolean; wipeDirectories?: boolean; userId?: number }) {
   let preBackup: { id: number; fileName: string } | null = null;
   if (opts.backupFirst) preBackup = await createBackup({ reason: "auto", note: "Перед очисткой базы данных", userId: opts.userId });
   const existing = new Set(await listTables());
@@ -248,14 +248,38 @@ export async function resetData(opts: { keepUsers: boolean; backupFirst: boolean
       const r = await client.query(`delete from users where role_id not in (select id from roles where sys_key = 'admin' or 'users.manage' = any(permissions)) returning id`);
       removed.users = r.rowCount ?? 0;
     }
-    for (const t of DIRECTORY_TABLES) {
-      if (!existing.has(t)) continue;
-      const r = t === "roles"
-        ? await client.query(`delete from roles where is_system = false and id not in (select role_id from users) returning id`)
-        : t === "warehouses"
-          ? await client.query(`delete from warehouses where is_system = false or kind = 'team' returning id`)
-          : await client.query(`delete from "${t}" where is_system = false returning id`);
-      removed[t] = r.rowCount ?? 0;
+    if (opts.wipeDirectories && existing.has("system_row_tombstones")) {
+      // Полная очистка справочников, включая предустановленные (демонстрационные) записи.
+      // Удалённые предустановленные ключи запоминаются, чтобы не вернуться при следующем старте.
+      for (const t of ["ticket_types", "ticket_priorities", "catalog_categories"]) {
+        if (!existing.has(t)) continue;
+        await client.query(`insert into system_row_tombstones (table_name, sys_key) select '${t}', sys_key from "${t}" where sys_key is not null on conflict do nothing`);
+        const r = await client.query(`delete from "${t}" returning id`);
+        removed[t] = r.rowCount ?? 0;
+      }
+      if (existing.has("measure_units")) {
+        await client.query(`insert into system_row_tombstones (table_name, sys_key) select 'measure_units', symbol from measure_units where is_system on conflict do nothing`);
+        removed.measure_units = (await client.query(`delete from measure_units returning id`)).rowCount ?? 0;
+      }
+      if (existing.has("work_catalog")) removed.work_catalog = (await client.query(`delete from work_catalog returning id`)).rowCount ?? 0;
+      if (existing.has("warehouses")) {
+        await client.query(`insert into system_row_tombstones (table_name, sys_key) select 'warehouses', 'transit' from warehouses where kind = 'transit' on conflict do nothing`);
+        removed.warehouses = (await client.query(`delete from warehouses where kind <> 'central' returning id`)).rowCount ?? 0;
+      }
+      if (existing.has("roles")) {
+        await client.query(`insert into system_row_tombstones (table_name, sys_key) select 'roles', sys_key from roles where sys_key is not null and sys_key <> 'admin' and id not in (select role_id from users) on conflict do nothing`);
+        removed.roles = (await client.query(`delete from roles where coalesce(sys_key, '') <> 'admin' and id not in (select role_id from users) returning id`)).rowCount ?? 0;
+      }
+    } else {
+      for (const t of DIRECTORY_TABLES) {
+        if (!existing.has(t)) continue;
+        const r = t === "roles"
+          ? await client.query(`delete from roles where is_system = false and id not in (select role_id from users) returning id`)
+          : t === "warehouses"
+            ? await client.query(`delete from warehouses where is_system = false or kind = 'team' returning id`)
+            : await client.query(`delete from "${t}" where is_system = false returning id`);
+        removed[t] = r.rowCount ?? 0;
+      }
     }
     await client.query("commit");
   } catch (e) {

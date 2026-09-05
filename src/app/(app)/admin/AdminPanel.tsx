@@ -28,6 +28,7 @@ export function AdminPanel({ canBackup, canMaint, backupDir, backups, stats, int
   const [backupFirst, setBackupFirst] = useState(true);
   const [showReset, setShowReset] = useState(false);
   const [keepUsers, setKeepUsers] = useState(true);
+  const [wipeDirectories, setWipeDirectories] = useState(false);
   const [check, setCheck] = useState<Integrity>(integrity);
   const [repairLog, setRepairLog] = useState<{ key: string; title: string; fixed: number }[] | null>(null);
 
@@ -145,22 +146,24 @@ export function AdminPanel({ canBackup, canMaint, backupDir, backups, stats, int
             </Table>
           </Card>
 
-          <Card title="Очистка базы данных «с чистого листа»">
-            <p className="mb-3 text-sm text-slate-600">Удаляются все заявки, чат и вложения, складские документы и остатки, оборудование, клиенты, объекты, бригады, автопарк и товары, а также несистемные записи справочников. Системные записи (роли, типы работ, приоритеты, категории, единицы, центральный и транзитный склады) сохраняются. Сотрудников можно оставить.</p>
+          <Card title="Удаление демо-данных и очистка «с чистого листа»">
+            <p className="mb-3 text-sm text-slate-600">Демонстрационные данные (клиенты, объекты, бригады, автомобили, товары, заявки, складские документы) нужны, чтобы разобраться в процессах; когда они больше не нужны — удалите их здесь. Удаляются все заявки, чат и вложения, складские документы и остатки, оборудование, клиенты, объекты, бригады, автопарк и товары, а также записи справочников, добавленные вручную. Предустановленные записи справочников (типы работ, приоритеты, категории, единицы измерения, роли, центральный и транзитный склады) по умолчанию сохраняются — их можно удалить вместе с остальным (флажок ниже) либо по одной в разделе «Справочники». Сотрудников можно оставить.</p>
             {!showReset ? (
               <button className={btnDangerCls} onClick={() => { setShowReset(true); setConfirm(""); }}>Очистить данные…</button>
             ) : (
               <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4">
-                <div className="grid gap-2 sm:grid-cols-4">
+                <div className="grid gap-2 sm:grid-cols-5">
                   <Field label="Введите ОЧИСТИТЬ"><input value={confirm} onChange={(e) => setConfirm(e.target.value)} className={inputCls} /></Field>
                   <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" checked={backupFirst} onChange={(e) => setBackupFirst(e.target.checked)} className="h-4 w-4" /> Сначала сделать копию</label>
                   <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" checked={keepUsers} onChange={(e) => setKeepUsers(e.target.checked)} className="h-4 w-4" /> Оставить сотрудников</label>
+                  <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" checked={wipeDirectories} onChange={(e) => setWipeDirectories(e.target.checked)} className="h-4 w-4" /> Удалить и предустановленные справочники</label>
                   <div className="flex items-end gap-2">
-                    <button className={btnDangerCls} disabled={confirm !== "ОЧИСТИТЬ" || busy !== null} onClick={() => run("reset", async () => { const r = await api<{ removed: Record<string, number> }>("/admin/reset", { method: "POST", json: { confirm, backupFirst, keepUsers } }); setShowReset(false); return `База очищена. Удалено: ${Object.entries(r.removed).filter(([, n]) => n).map(([t, n]) => `${t} — ${n}`).join(", ") || "нечего удалять"}`; })}>{busy === "reset" ? "Очистка…" : "Очистить"}</button>
+                    <button className={btnDangerCls} disabled={confirm !== "ОЧИСТИТЬ" || busy !== null} onClick={() => run("reset", async () => { const r = await api<{ removed: Record<string, number> }>("/admin/reset", { method: "POST", json: { confirm, backupFirst, keepUsers, wipeDirectories } }); setShowReset(false); return `База очищена. Удалено: ${Object.entries(r.removed).filter(([, n]) => n).map(([t, n]) => `${t} — ${n}`).join(", ") || "нечего удалять"}`; })}>{busy === "reset" ? "Очистка…" : "Очистить"}</button>
                     <button className={btnSecondaryCls} onClick={() => setShowReset(false)}>Отмена</button>
                   </div>
                 </div>
                 {!keepUsers && <p className="mt-2 text-xs text-rose-800">Будут удалены все сотрудники, кроме администраторов (иначе в систему нельзя будет войти).</p>}
+                {wipeDirectories && <p className="mt-2 text-xs text-rose-800">Справочники будут пустыми: перед созданием первой заявки заведите типы работ и приоритеты, для товаров — категории и единицы измерения. Останутся только центральный склад и роли, назначенные сотрудникам.</p>}
               </div>
             )}
           </Card>

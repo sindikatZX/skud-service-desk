@@ -106,15 +106,17 @@ export function TicketActions({ ticket, allowed, perms, types, priorities, isClo
       )}
 
       {tab === "work" && (
-        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const form = e.currentTarget; const fd = new FormData(form); const b = Object.fromEntries(fd.entries()); run(() => api(`/tickets/${ticket.id}/works`, { method: "POST", json: b }), "Работа добавлена").then(() => form.reset()); }}>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const form = e.currentTarget; const fd = new FormData(form); const b = Object.fromEntries([...fd.entries()].filter(([, v]) => v !== "")); run(() => api(`/tickets/${ticket.id}/works`, { method: "POST", json: b }), "Работа добавлена").then(() => form.reset()); }}>
           {works.length > 0 && (
             <Field label="Из справочника работ">
-              <select className={inputCls} defaultValue="" onChange={(e) => { const w = works.find((x) => x.id === Number(e.target.value)); if (!w) return; const f = e.currentTarget.form!; (f.elements.namedItem("description") as HTMLInputElement).value = w.name; (f.elements.namedItem("unit") as HTMLInputElement).value = w.unit; if (w.defaultMinutes) (f.elements.namedItem("durationMinutes") as HTMLInputElement).value = String(w.defaultMinutes); }}>
+              <select className={inputCls} defaultValue="" onChange={(e) => { const w = works.find((x) => x.id === Number(e.target.value)); const f = e.currentTarget.form!; (f.elements.namedItem("workCatalogId") as HTMLInputElement).value = w ? String(w.id) : ""; if (!w) return; (f.elements.namedItem("description") as HTMLInputElement).value = w.name; (f.elements.namedItem("unit") as HTMLInputElement).value = w.unit; if (w.defaultMinutes) (f.elements.namedItem("durationMinutes") as HTMLInputElement).value = String(w.defaultMinutes); }}>
                 <option value="">— выбрать работу —</option>
                 {works.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </Field>
           )}
+          {/* ссылка на справочник работ: заполняется при выборе из списка, для отборов в отчётах */}
+          <input type="hidden" name="workCatalogId" defaultValue="" />
           <Field label="Описание работы"><input name="description" className={inputCls} required placeholder="Напр.: Замена камеры, настройка регистратора" /></Field>
           <div className="grid grid-cols-3 gap-2">
             <Field label="Кол-во"><input name="quantity" type="number" step="0.01" min="0.01" defaultValue="1" className={inputCls} /></Field>

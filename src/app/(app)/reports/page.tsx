@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/page-auth";
 import { can, canWithRole } from "@/lib/rbac";
 import { dashboardSummary, employeeWorkload, inventoryConsumption, clientsReport, teamsStockSummary } from "@/lib/services/reports";
 import { listTeamsWithDetails } from "@/lib/services/teams";
-import { Card, PageHeader, Table, Td, Stat, inputCls } from "@/components/ui";
+import { Card, PageHeader, Table, Td, inputCls } from "@/components/ui";
 import { STATUS_LABELS, fmtQty } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -62,32 +62,37 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         ))}
       </div>
       <Card className="mb-4">
-        <form className="grid gap-2 sm:grid-cols-4">
-          <input type="date" name="from" defaultValue={sp.from ?? ""} className={inputCls} />
-          <input type="date" name="to" defaultValue={sp.to ?? ""} className={inputCls} />
-          <select name="teamId" defaultValue={sp.teamId ?? ""} className={inputCls}><option value="">Все бригады</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-          <div className="flex gap-2"><button className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Применить</button><Link href="/reports" className="rounded-xl border border-slate-300 px-4 py-2 text-sm">Сброс</Link></div>
+        <form className="flex flex-wrap items-end gap-2 text-sm">
+          <label className="flex items-center gap-1.5"><span className="text-xs text-slate-500">с</span><input type="date" name="from" defaultValue={sp.from ?? ""} className={`${inputCls} w-[9.5rem] px-2`} /></label>
+          <label className="flex items-center gap-1.5"><span className="text-xs text-slate-500">по</span><input type="date" name="to" defaultValue={sp.to ?? ""} className={`${inputCls} w-[9.5rem] px-2`} /></label>
+          <select name="teamId" defaultValue={sp.teamId ?? ""} className={`${inputCls} w-auto min-w-[10rem]`}><option value="">Все бригады</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+          <div className="flex gap-2"><button className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Сформировать</button><Link href="/reports" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm">Очистить</Link></div>
         </form>
       </Card>
 
       {viewOps && (
         <>
           <h2 className="mb-2 text-lg font-semibold">Заявки</h2>
-          <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-            {Object.entries(STATUS_LABELS).map(([k, v]) => <Stat key={k} label={v} value={summary.byStatus[k] ?? 0} href={`/tickets?status=${k}`} />)}
-          </div>
-          <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat label="Ср. время реакции" value={summary.avgReactionHours != null ? `${summary.avgReactionHours} ч` : "—"} hint="от создания до взятия в работу" />
-            <Stat label="Ср. время решения" value={summary.avgResolutionHours != null ? `${summary.avgResolutionHours} ч` : "—"} hint="от взятия в работу до выполнения" />
-            <Stat label="Полный цикл" value={summary.avgCompletionHours != null ? `${summary.avgCompletionHours} ч` : "—"} hint="от создания до выполнения" />
-            <Stat label="Выполнено в срок" value={summary.onTimeRate != null ? `${summary.onTimeRate}%` : "—"} hint="доля закрытых не позже срока" />
-          </div>
-          <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-            {summary.byType.map((t) => <Stat key={t.name} label={`Тип: ${t.name}`} value={t.count} />)}
-          </div>
-          <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-            {summary.byPriority.map((p) => <Stat key={p.name} label={`Приоритет: ${p.name}`} value={p.count} />)}
-          </div>
+          {/* Показатели — компактные таблицы вместо крупных плиток: четыре блока в одну строку на широком экране */}
+          <Card className="mb-4 p-3! sm:p-4!">
+            <div className="grid gap-x-6 gap-y-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
+              <KpiTable
+                title="По статусам"
+                rows={Object.entries(STATUS_LABELS).map(([k, v]) => ({ key: k, label: v, value: summary.byStatus[k] ?? 0, href: `/tickets?status=${k}` }))}
+              />
+              <KpiTable
+                title="SLA"
+                rows={[
+                  { key: "react", label: "Ср. время реакции", value: summary.avgReactionHours != null ? `${summary.avgReactionHours} ч` : "—", hint: "создание → в работу" },
+                  { key: "res", label: "Ср. время решения", value: summary.avgResolutionHours != null ? `${summary.avgResolutionHours} ч` : "—", hint: "в работу → выполнено" },
+                  { key: "cycle", label: "Полный цикл", value: summary.avgCompletionHours != null ? `${summary.avgCompletionHours} ч` : "—", hint: "создание → выполнено" },
+                  { key: "ontime", label: "Выполнено в срок", value: summary.onTimeRate != null ? `${summary.onTimeRate}%` : "—", hint: "доля закрытых не позже срока" },
+                ]}
+              />
+              <KpiTable title="По типам работ" rows={summary.byType.map((t) => ({ key: t.name, label: t.name, value: t.count }))} />
+              <KpiTable title="По приоритетам" rows={summary.byPriority.map((p) => ({ key: p.name, label: p.name, value: p.count }))} />
+            </div>
+          </Card>
           <Card title="Загрузка и эффективность монтажников" className="mb-4">
             <Table head={["Сотрудник", "Бригада", "Работ выполнено", "Заявок с участием", "Часы (по работам)", "Активных заявок бригады", "Выполнено бригадой", "Просрочено", "Ср. время выполнения"]} empty={!workload.length}>
               {workload.map((w) => (
@@ -130,6 +135,29 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           ))}
         </div>
       </Card>
+    </div>
+  );
+}
+
+/** Компактная таблица показателей: подпись слева, значение справа (табличные цифры). */
+function KpiTable({ title, rows }: { title: string; rows: { key: string; label: string; value: number | string; href?: string; hint?: string }[] }) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 border-b border-slate-200 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
+      <table className="w-full">
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.key} className="border-b border-slate-100 last:border-0">
+              <td className="py-0.5 pr-2 text-slate-700">
+                {r.href ? <Link href={r.href} className="hover:text-indigo-700 hover:underline">{r.label}</Link> : r.label}
+                {r.hint && <span className="ml-1 text-[10px] text-slate-400">{r.hint}</span>}
+              </td>
+              <td className="py-0.5 text-right font-semibold tabular-nums text-slate-900">{r.value}</td>
+            </tr>
+          ))}
+          {!rows.length && <tr><td className="py-1 text-slate-400">Нет данных</td></tr>}
+        </tbody>
+      </table>
     </div>
   );
 }

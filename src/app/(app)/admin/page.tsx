@@ -3,6 +3,8 @@ import { canWithRole } from "@/lib/rbac";
 import { PageHeader } from "@/components/ui";
 import { listBackups, dbStats, integrityCheck, BACKUP_DIR } from "@/lib/services/admin";
 import { AdminPanel } from "./AdminPanel";
+import { BrandingPanel } from "./BrandingPanel";
+import { getBranding, COLOR_PRESETS } from "@/lib/services/branding";
 
 export const dynamic = "force-dynamic";
 
@@ -10,14 +12,16 @@ export default async function AdminPage() {
   const user = await requireUser(["admin.backup", "admin.maintenance"]);
   const canBackup = canWithRole(user, "admin.backup");
   const canMaint = canWithRole(user, "admin.maintenance");
-  const [backups, stats, integrity] = await Promise.all([
+  const [backups, stats, integrity, branding] = await Promise.all([
     canBackup ? listBackups() : Promise.resolve([]),
     dbStats(),
     canMaint ? integrityCheck() : Promise.resolve(null),
+    getBranding(),
   ]);
   return (
     <div>
-      <PageHeader title="Администрирование базы данных" subtitle={`Резервные копии, восстановление, очистка и обслуживание · ${stats.name} · ${stats.size} · ${stats.version}`} />
+      <PageHeader title="Администрирование" subtitle={`Оформление, резервные копии, восстановление, очистка и обслуживание · ${stats.name} · ${stats.size} · ${stats.version}`} />
+      {canMaint && <div className="mb-4"><BrandingPanel branding={branding} presets={COLOR_PRESETS} /></div>}
       <AdminPanel
         canBackup={canBackup}
         canMaint={canMaint}

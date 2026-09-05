@@ -4,6 +4,38 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 }
 
+/* ─── Основной цвет оформления (настраивается в «Администрирование → Оформление») ───
+   Базовый цвет --brand задаётся сервером в <style> корневого layout; оттенки получаются
+   смешиванием с белым/чёрным, а утилиты indigo-* Tailwind переключены на эти оттенки,
+   поэтому весь интерфейс перекрашивается одной настройкой. */
+:root {
+  --brand: #4f46e5;
+  --brand-50: color-mix(in oklab, var(--brand) 6%, white);
+  --brand-100: color-mix(in oklab, var(--brand) 12%, white);
+  --brand-200: color-mix(in oklab, var(--brand) 25%, white);
+  --brand-300: color-mix(in oklab, var(--brand) 42%, white);
+  --brand-400: color-mix(in oklab, var(--brand) 65%, white);
+  --brand-500: color-mix(in oklab, var(--brand) 85%, white);
+  --brand-600: var(--brand);
+  --brand-700: color-mix(in oklab, var(--brand) 85%, black);
+  --brand-800: color-mix(in oklab, var(--brand) 70%, black);
+  --brand-900: color-mix(in oklab, var(--brand) 55%, black);
+  --brand-950: color-mix(in oklab, var(--brand) 40%, black);
+}
+@theme inline {
+  --color-indigo-50: var(--brand-50);
+  --color-indigo-100: var(--brand-100);
+  --color-indigo-200: var(--brand-200);
+  --color-indigo-300: var(--brand-300);
+  --color-indigo-400: var(--brand-400);
+  --color-indigo-500: var(--brand-500);
+  --color-indigo-600: var(--brand-600);
+  --color-indigo-700: var(--brand-700);
+  --color-indigo-800: var(--brand-800);
+  --color-indigo-900: var(--brand-900);
+  --color-indigo-950: var(--brand-950);
+}
+
 /* ─── Базовые мобильные настройки ───────────────────────────── */
 html {
   -webkit-text-size-adjust: 100%;

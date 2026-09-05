@@ -9,7 +9,8 @@ import { fmtQty } from "@/lib/labels";
 import { fmtMoney } from "@/lib/prices";
 import { stockReport, parsePeriod, periodLabel } from "@/lib/services/report-builder";
 import { stockReportQuerySchema } from "@/lib/validators";
-import { ReportToolbar, SortTh, PrintHeader, PrintFooter, MultiSelect, ReportForm } from "../ReportKit";
+import { ReportToolbar, SortTh, PrintHeader, PrintFooter, MultiSelect, ReportForm, PeriodFields, FilterRow } from "../ReportKit";
+import { getBranding } from "@/lib/services/branding";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,10 @@ export default async function StockReportPage({ searchParams }: { searchParams: 
   const q = parsed.success ? parsed.data : stockReportQuerySchema.parse({});
   const canPrices = canSeePrices(user);
   const canExport = canWithRole(user, "reports.export");
-  const [whs, cats] = await Promise.all([
+  const [whs, cats, branding] = await Promise.all([
     db.select({ id: warehouses.id, name: warehouses.name }).from(warehouses).where(eq(warehouses.isActive, true)).orderBy(asc(warehouses.sortOrder), asc(warehouses.name)),
     db.select({ id: catalogCategories.id, name: catalogCategories.name }).from(catalogCategories).orderBy(asc(catalogCategories.name)),
+    getBranding(),
   ]);
   const period = parsePeriod(q.from, q.to);
   const rep = await stockReport({ warehouseIds: q.warehouseIds, period, q: q.q, categoryId: q.categoryId, onlyNonZero: q.onlyNonZero, sort: q.sort, dir: q.dir, canPrices });
@@ -39,20 +41,29 @@ export default async function StockReportPage({ searchParams }: { searchParams: 
       <PageHeader title="Отчёт остатков" subtitle="Начальный остаток, приход, расход и конечный остаток по складам за период" action={<Link href="/reports" className="no-print text-sm text-indigo-600">← Все отчёты</Link>} />
       <Card className="no-print mb-4">
         <ReportForm action="/reports/stock">
-          <Field label="Период с"><input type="date" name="from" defaultValue={q.from ?? ""} className={inputCls} /></Field>
-          <Field label="по"><input type="date" name="to" defaultValue={q.to ?? ""} className={inputCls} /></Field>
-          <MultiSelect name="warehouseIds[]" label="Склады (пусто — все активные)" options={whs} selected={q.warehouseIds} />
-          <div className="grid gap-2">
+          {/* Ряд 1: период и категория */}
+          <FilterRow>
+            <PeriodFields from={q.from} to={q.to} />
             <Field label="Категория"><select name="categoryId" defaultValue={q.categoryId ?? ""} className={inputCls}><option value="">Все</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+            <label className="flex items-center gap-2 pt-7 text-sm">
+              {/* скрытое поле идёт первым: снятый флажок даёт «0», установленный — перекрывает его «1» */}
+              <input type="hidden" name="onlyNonZero" value="0" />
+              <input type="checkbox" name="onlyNonZero" value="1" defaultChecked={q.onlyNonZero} className="h-4 w-4" /> Скрывать нулевые строки
+            </label>
+          </FilterRow>
+          {/* Ряд 2: поиск */}
+          <FilterRow>
             <Field label="Товар (часть наименования / артикул / код)"><input name="q" defaultValue={q.q ?? ""} className={inputCls} placeholder="камера" /></Field>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="onlyNonZero" value="1" defaultChecked={q.onlyNonZero} className="h-4 w-4" /> Скрывать нулевые строки</label>
-            <input type="hidden" name="onlyNonZero" value={q.onlyNonZero ? "1" : "0"} />
-          </div>
+          </FilterRow>
+          {/* Ряд 3: склады */}
+          <FilterRow cols={2}>
+            <MultiSelect name="warehouseIds[]" label="Склады (пусто — все активные)" options={whs} selected={q.warehouseIds} size={5} resizable />
+          </FilterRow>
         </ReportForm>
       </Card>
 
       <Card className="print-area">
-        <PrintHeader title="Отчёт остатков" period={periodLabel(period)} filters={filters} user={user.fullName} />
+        <PrintHeader appName={branding.appName} title="Отчёт остатков" period={periodLabel(period)} filters={filters} user={user.fullName} />
         <div className="mb-3"><ReportToolbar csvHref={`/api/v1/reports/stock?${query}&format=csv`} resetHref="/reports/stock" canExport={canExport} rows={rep.rows.length} /></div>
         <div className="-mx-4 overflow-x-auto sm:mx-0">
           <table className="min-w-full text-sm">

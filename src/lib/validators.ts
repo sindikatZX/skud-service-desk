@@ -181,6 +181,8 @@ export const ticketListQuerySchema = z.object({
 
 export const workCreateSchema = z.object({
   description: name(500),
+  /** Ссылка на справочник работ, если работа выбрана из него. */
+  workCatalogId: optionalId,
   quantity: z.coerce.number().positive().max(100000).optional(),
   unit: name(20).optional(),
   durationMinutes: z.coerce.number().int().min(0).max(100000).nullish(),
@@ -455,6 +457,8 @@ export const worksReportQuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   typeIds: csvList,
+  /** Отбор по справочнику «Виды работ и услуг» (work_catalog): по ссылке из акта либо по совпадению наименования. */
+  workIds: csvList,
   q: z.string().trim().max(200).optional(),
   siteIds: csvList,
   clientIds: csvList,
@@ -480,7 +484,19 @@ export const resetSchema = z.object({
   backupFirst: z.boolean().optional().default(true),
   /** Оставить сотрудников (учётные записи) и роли. */
   keepUsers: z.boolean().optional().default(true),
+  /** Удалить и предустановленные записи справочников (типы работ, приоритеты, категории, единицы, транзитный склад, неиспользуемые роли). */
+  wipeDirectories: z.boolean().optional().default(false),
 });
+/** Оформление приложения (название, логотип, цвет). */
+export const brandingUpdateSchema = z.object({
+  appName: z.string().trim().min(1, "укажите название").max(60).optional(),
+  tagline: z.string().trim().max(120).optional(),
+  primaryColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "цвет в формате #rrggbb").optional(),
+  /** null — убрать логотип; undefined — не менять. */
+  logoDataUrl: z.string().max(700_000).nullable().optional(),
+  loginBgDataUrl: z.string().max(700_000).nullable().optional(),
+});
+
 export const maintenanceSchema = z.object({
   action: z.enum(["vacuum", "analyze", "reindex", "check", "repair"]),
   backupFirst: z.boolean().optional().default(true),

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { ticketTypes, sites, clients, teams, users, roles } from "@/db/schema";
+import { ticketTypes, sites, clients, teams, users, roles, workCatalog } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/page-auth";
 import { canWithRole } from "@/lib/rbac";
@@ -8,7 +8,8 @@ import { Card, PageHeader, Field, inputCls } from "@/components/ui";
 import { fmtQty, fmtDate } from "@/lib/labels";
 import { worksReport, parsePeriod, periodLabel } from "@/lib/services/report-builder";
 import { worksReportQuerySchema } from "@/lib/validators";
-import { ReportToolbar, SortTh, PrintHeader, PrintFooter, MultiSelect, ReportForm } from "../ReportKit";
+import { ReportToolbar, SortTh, PrintHeader, PrintFooter, MultiSelect, ReportForm, PeriodFields, FilterRow } from "../ReportKit";
+import { getBranding } from "@/lib/services/branding";
 
 export const dynamic = "force-dynamic";
 
@@ -18,21 +19,24 @@ export default async function WorksReportPage({ searchParams }: { searchParams: 
   const parsed = worksReportQuerySchema.safeParse(sp);
   const q = parsed.success ? parsed.data : worksReportQuerySchema.parse({});
   const canExport = canWithRole(user, "reports.export");
-  const [types, siteRows, clientRows, teamRows, performers] = await Promise.all([
+  const [types, siteRows, clientRows, teamRows, performers, workRows, branding] = await Promise.all([
     db.select({ id: ticketTypes.id, name: ticketTypes.name }).from(ticketTypes).orderBy(asc(ticketTypes.sortOrder)),
     db.select({ id: sites.id, name: sites.name, clientName: clients.name }).from(sites).innerJoin(clients, eq(clients.id, sites.clientId)).orderBy(asc(clients.name), asc(sites.name)),
     db.select({ id: clients.id, name: clients.name }).from(clients).orderBy(asc(clients.name)),
     db.select({ id: teams.id, name: teams.name }).from(teams).orderBy(asc(teams.name)),
     db.select({ id: users.id, name: users.fullName }).from(users).innerJoin(roles, eq(roles.id, users.roleId)).where(eq(roles.isFieldStaff, true)).orderBy(asc(users.fullName)),
+    db.select({ id: workCatalog.id, name: workCatalog.name, unit: workCatalog.unit }).from(workCatalog).orderBy(asc(workCatalog.sortOrder), asc(workCatalog.name)),
+    getBranding(),
   ]);
   const period = parsePeriod(q.from, q.to);
-  const rep = await worksReport({ period, typeIds: q.typeIds, q: q.q, siteIds: q.siteIds, clientIds: q.clientIds, teamIds: q.teamIds, performerIds: q.performerIds, sort: q.sort, dir: q.dir, limit: q.limit });
+  const rep = await worksReport({ period, typeIds: q.typeIds, workIds: q.workIds, q: q.q, siteIds: q.siteIds, clientIds: q.clientIds, teamIds: q.teamIds, performerIds: q.performerIds, sort: q.sort, dir: q.dir, limit: q.limit });
   const query = new URLSearchParams(Object.entries(sp).filter((e): e is [string, string] => Boolean(e[1]))).toString();
   const sort = q.sort ?? "date"; const dir = q.dir ?? "desc";
   const where = q.mode === "where";
   const title = where ? "Отчёт по работам: где сделали" : "Отчёт по работам: что сделали";
   const filters = [
     { label: "Виды работ", value: types.filter((t) => q.typeIds.includes(t.id)).map((t) => t.name).join(", ") },
+    { label: "Виды работ и услуг (справочник)", value: workRows.filter((w) => q.workIds.includes(w.id)).map((w) => w.name).join(", ") },
     { label: "Работа", value: q.q ?? "" },
     { label: "Клиенты", value: clientRows.filter((c) => q.clientIds.includes(c.id)).map((c) => c.name).join(", ") },
     { label: "Объекты", value: siteRows.filter((s) => q.siteIds.includes(s.id)).map((s) => `${s.clientName} — ${s.name}`).join(", ") },
@@ -48,33 +52,35 @@ export default async function WorksReportPage({ searchParams }: { searchParams: 
         <Link href={`/reports/works?${new URLSearchParams({ ...Object.fromEntries(Object.entries(sp).filter((e): e is [string, string] => Boolean(e[1]))), mode: "where" }).toString()}`} className={`rounded-full border px-3 py-1 ${where ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white"}`}>Где сделали</Link>
       </div>
       <Card className="no-print mb-4">
-        <ReportForm action="/reports/works">
+        <ReportForm action="/reports/works" resetHref={`/reports/works?mode=${q.mode}`} keep={["mode"]}>
           <input type="hidden" name="mode" value={q.mode} />
-          <div className="grid gap-2">
-            <Field label="Период с"><input type="date" name="from" defaultValue={q.from ?? ""} className={inputCls} /></Field>
-            <Field label="по"><input type="date" name="to" defaultValue={q.to ?? ""} className={inputCls} /></Field>
+          {/* Ряд 1: период, поиск по наименованию, вид работ (тип заявки) */}
+          <FilterRow>
+            <PeriodFields from={q.from} to={q.to} />
             <Field label="Работа (часть наименования)"><input name="q" defaultValue={q.q ?? ""} className={inputCls} placeholder="монтаж камеры" /></Field>
-          </div>
-          <MultiSelect name="typeIds[]" label="Вид работ" options={types} selected={q.typeIds} />
-          {where ? (
-            <>
-              <div className="grid gap-2">
-                <MultiSelect name="clientIds[]" label="Клиенты" options={clientRows} selected={q.clientIds} size={4} />
-                <MultiSelect name="teamIds[]" label="Бригады" options={teamRows} selected={q.teamIds} size={3} />
-              </div>
-              <MultiSelect name="siteIds[]" label="Точки (объекты) клиента" options={siteRows.map((s) => ({ value: s.id, label: `${s.clientName} — ${s.name}` }))} selected={q.siteIds} size={8} />
-            </>
-          ) : (
-            <div className="grid gap-2">
-              <MultiSelect name="performerIds[]" label="Исполнители" options={performers} selected={q.performerIds} size={4} />
-              <MultiSelect name="teamIds[]" label="Бригады" options={teamRows} selected={q.teamIds} size={3} />
-            </div>
+            <MultiSelect name="typeIds[]" label="Вид работ (тип заявки)" options={types} selected={q.typeIds} size={4} resizable />
+          </FilterRow>
+          {/* Ряд 2: справочник работ и услуг + исполнители / клиенты */}
+          <FilterRow>
+            <MultiSelect name="workIds[]" label="Виды работ и услуг (справочник работ)" options={workRows.map((w) => ({ value: w.id, label: `${w.name} (${w.unit})` }))} selected={q.workIds} size={5} resizable />
+            {where ? (
+              <MultiSelect name="clientIds[]" label="Клиенты" options={clientRows} selected={q.clientIds} size={5} resizable />
+            ) : (
+              <MultiSelect name="performerIds[]" label="Исполнители" options={performers} selected={q.performerIds} size={5} resizable />
+            )}
+            <MultiSelect name="teamIds[]" label="Бригады" options={teamRows} selected={q.teamIds} size={5} resizable />
+          </FilterRow>
+          {/* Ряд 3: объекты (в режиме «где сделали») */}
+          {where && (
+            <FilterRow cols={2}>
+              <MultiSelect name="siteIds[]" label="Точки (объекты) клиента" options={siteRows.map((s) => ({ value: s.id, label: `${s.clientName} — ${s.name}` }))} selected={q.siteIds} size={6} resizable />
+            </FilterRow>
           )}
         </ReportForm>
       </Card>
 
       <Card className="print-area">
-        <PrintHeader title={title} period={periodLabel(period)} filters={filters} user={user.fullName} />
+        <PrintHeader appName={branding.appName} title={title} period={periodLabel(period)} filters={filters} user={user.fullName} />
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex flex-wrap gap-2 text-xs">
             <span className="rounded-full bg-slate-100 px-2 py-0.5">Работ: <b>{rep.totals.works}</b></span>

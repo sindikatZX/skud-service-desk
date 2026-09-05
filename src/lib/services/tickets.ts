@@ -342,7 +342,7 @@ export async function changeStatus(user: SessionUser, id: number, to: TicketStat
 export async function addWork(
   user: SessionUser,
   ticketId: number,
-  input: { description: string; quantity?: number; unit?: string; durationMinutes?: number | null; performedBy?: number | null },
+  input: { description: string; workCatalogId?: number | null; quantity?: number; unit?: string; durationMinutes?: number | null; performedBy?: number | null },
 ) {
   const t = await getTicket(user, ticketId);
   if (["closed", "cancelled"].includes(t.status)) throw conflict("Заявка закрыта");
@@ -352,6 +352,7 @@ export async function addWork(
     .values({
       ticketId,
       description: input.description,
+      workCatalogId: input.workCatalogId ?? null,
       quantity: String(input.quantity ?? 1),
       unit: input.unit ?? "шт",
       durationMinutes: input.durationMinutes ?? null,

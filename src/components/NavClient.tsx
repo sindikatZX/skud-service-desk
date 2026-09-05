@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import Image from "next/image";
 import { useEffect, useState, type ReactNode } from "react";
 import type { NavItem } from "@/components/AppShell";
+import { BrandLogo } from "@/components/BrandLogo";
 import { Icon } from "@/components/icons";
 
 type Profile = { fullName: string; roleName: string; email: string; initials: string };
@@ -110,7 +110,7 @@ export function BottomNav({ items, profile }: { items: NavItem[]; profile: Profi
 }
 
 /** Мобильная шапка: «Назад» на вложенных экранах, бренд, аватар с меню. */
-export function MobileHeader({ homeHref, profile }: { homeHref: string; profile: Profile }) {
+export function MobileHeader({ homeHref, profile, appName = "СКУД•Сервис", logo = null }: { homeHref: string; profile: Profile; appName?: string; logo?: string | null }) {
   const path = usePathname();
   const router = useRouter();
   const [menuAt, setMenuAt] = useState<string | null>(null);
@@ -133,8 +133,8 @@ export function MobileHeader({ homeHref, profile }: { homeHref: string; profile:
             <span className="w-2" />
           )}
           <Link href={homeHref} className="flex items-center gap-2 px-1 text-base font-bold text-indigo-700">
-            <Image src="/icons/icon-192.png" alt="" width={28} height={28} unoptimized className="h-7 w-7 rounded-lg" />
-            <span>СКУД•Сервис</span>
+            <BrandLogo src={logo} size={28} className="rounded-lg" />
+            <span className="truncate">{appName}</span>
           </Link>
         </div>
         <div className="relative">

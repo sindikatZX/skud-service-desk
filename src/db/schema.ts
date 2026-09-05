@@ -9,6 +9,7 @@ import {
   numeric,
   uniqueIndex,
   index,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -604,13 +605,15 @@ export const ticketWorks = pgTable(
       .notNull()
       .references(() => tickets.id, { onDelete: "cascade" }),
     description: text("description").notNull(),
+    /** Ссылка на справочник работ, если работа выбрана из него (для отборов в отчётах). */
+    workCatalogId: integer("work_catalog_id").references(() => workCatalog.id, { onDelete: "set null" }),
     quantity: numeric("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
     unit: text("unit").notNull().default("шт"),
     durationMinutes: integer("duration_minutes"),
     performedBy: integer("performed_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("works_ticket_idx").on(t.ticketId), index("works_performer_idx").on(t.performedBy)],
+  (t) => [index("works_ticket_idx").on(t.ticketId), index("works_performer_idx").on(t.performedBy), index("works_catalog_idx").on(t.workCatalogId)],
 );
 
 /** Установленное по заявке оборудование/материалы (= оборудование на объекте). */
@@ -674,6 +677,34 @@ export const dbBackups = pgTable("db_backups", {
   createdBy: integer("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+
+/**
+ * Настройки приложения «ключ → значение» (оформление: название, логотип, цвет и т.п.).
+ * Значение — произвольный JSON, чтобы добавлять настройки без миграций.
+ */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").$type<unknown>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: integer("updated_by"),
+});
+
+/**
+ * Удалённые предустановленные записи справочников. Предустановленные записи (isSystem)
+ * при старте досоздаются, если их нет; чтобы удалённая пользователем запись не
+ * возвращалась после перезапуска, факт удаления запоминается здесь.
+ */
+export const systemRowTombstones = pgTable(
+  "system_row_tombstones",
+  {
+    id: serial("id").primaryKey(),
+    tableName: text("table_name").notNull(),
+    sysKey: text("sys_key").notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("system_row_tombstones_idx").on(t.tableName, t.sysKey)],
+);
 
 // ─────────────────────────── RELATIONS ───────────────────────────
 

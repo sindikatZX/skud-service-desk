@@ -9,6 +9,7 @@ import { receive, issueToTeam, reserve, install } from "@/lib/services/inventory
 import { SYSTEM_ROLES, ADDED_PERMISSIONS } from "@/lib/rbac";
 import { ensureWarehouses } from "@/lib/services/warehouses";
 import { migrateCodes, nextCode, type CodedTable } from "@/lib/codes";
+import { deletedSystemKeys } from "@/lib/services/directories";
 
 /** Системные записи справочников: создаются при первом запуске и защищены от удаления. */
 const SYSTEM_TICKET_TYPES = [
@@ -47,7 +48,10 @@ const SYSTEM_UNITS = [
   { symbol: "упак", name: "Упаковка", sortOrder: 40 },
 ];
 
-/** Вставляет отсутствующие системные записи (по sys_key), присваивая им коды формата XX_ГГГГ_NNNNN. */
+/**
+ * Вставляет отсутствующие предустановленные записи (по sys_key), присваивая им коды формата
+ * XX_ГГГГ_NNNNN. Записи, которые пользователь удалил (system_row_tombstones), не воссоздаются.
+ */
 async function ensureSystemRows<T extends { code: string }>(
   table: CodedTable,
   existing: string[],
@@ -55,8 +59,9 @@ async function ensureSystemRows<T extends { code: string }>(
   insert: (row: T, code: string) => Promise<unknown>,
 ) {
   const have = new Set(existing);
+  const deleted = await deletedSystemKeys(table);
   for (const r of rows) {
-    if (have.has(r.code)) continue;
+    if (have.has(r.code) || deleted.has(r.code)) continue;
     await insert(r, await nextCode(table));
   }
 }
@@ -90,8 +95,10 @@ export async function ensureSystemDirectories() {
     db.insert(measureUnits).values({ code, symbol: u.symbol, name: u.name, sortOrder: u.sortOrder, isSystem: true }),
   );
   // Новые права у системных ролей (появившиеся после обновления) — добавляем, не трогая пользовательские настройки.
+  // Администратор — полный доступ по определению: ему докидываются все права набора (иначе после
+  // обновления с новыми правами администратор видел бы «Недостаточно прав» в новых разделах).
   for (const r of SYSTEM_ROLES) {
-    const extra = r.permissions.filter((p) => ADDED_PERMISSIONS.includes(p));
+    const extra = r.code === "admin" ? r.permissions : r.permissions.filter((p) => ADDED_PERMISSIONS.includes(p));
     if (!extra.length) continue;
     await db.execute(sql`update roles set permissions = (select array(select distinct unnest(permissions || ${sql.raw(`ARRAY[${extra.map((e) => `'${e}'`).join(",")}]::text[]`)}))) where sys_key = ${r.code} and is_system = true`);
   }

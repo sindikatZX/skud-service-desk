@@ -45,10 +45,10 @@ export function SortTh({ field, children, current, dir, className = "" }: { fiel
 }
 
 /** Шапка печатной формы: заголовок, период, параметры отбора, дата формирования, исполнитель. */
-export function PrintHeader({ title, period, filters, user }: { title: string; period: string; filters: { label: string; value: string }[]; user: string }) {
+export function PrintHeader({ title, period, filters, user, appName = "СКУД•Сервис" }: { title: string; period: string; filters: { label: string; value: string }[]; user: string; appName?: string }) {
   return (
     <div className="print-only mb-4">
-      <div className="text-lg font-bold">СКУД•Сервис — {title}</div>
+      <div className="text-lg font-bold">{appName} — {title}</div>
       <div className="text-sm">Период: {period}</div>
       {filters.filter((f) => f.value).length > 0 && (
         <div className="mt-1 text-xs text-slate-700">
@@ -73,27 +73,73 @@ export function PrintFooter() {
 type Opt = { value: number | string; label: string } | { id: number; name: string };
 const optOf = (o: Opt) => ("value" in o ? o : { value: o.id, label: o.name });
 
-export function MultiSelect({ name, options: raw, selected, label, size = 5 }: { name: string; options: Opt[]; selected: (number | string)[]; label: string; size?: number }) {
+export function MultiSelect({ name, options: raw, selected, label, size = 5, resizable, className = "" }: { name: string; options: Opt[]; selected: (number | string)[]; label: string; size?: number; /** разрешить менять размер списка мышью (по горизонтали и вертикали) */ resizable?: boolean; className?: string }) {
   const options = raw.map(optOf);
   return (
-    <label className="block text-sm">
+    <label className={`block text-sm ${className}`}>
       <span className="mb-1 flex items-center justify-between font-medium text-slate-700">
         {label}
-        <span className="text-[10px] font-normal text-slate-400">Ctrl/⌘ — несколько</span>
+        <span className="text-[10px] font-normal text-slate-400">Ctrl/⌘ — несколько{resizable ? " · размер — за уголок" : ""}</span>
       </span>
-      <select name={name} multiple size={size} defaultValue={selected.map(String)} className={`${inputCls} min-h-0 py-1`}>
+      <select
+        name={name}
+        multiple
+        size={size}
+        defaultValue={selected.map(String)}
+        className={`${inputCls} min-h-0 py-1 ${resizable ? "resize overflow-auto" : ""}`}
+        style={resizable ? { minHeight: `${Math.max(4, size) * 1.4 + 0.6}rem`, minWidth: "12rem", maxWidth: "100%" } : undefined}
+      >
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </label>
   );
 }
 
-/** Сериализация выбранных значений multiple-select в CSV параметр. */
-export function ReportForm({ children, action }: { children: ReactNode; action: string }) {
+/** Компактный отбор по периоду в одну строку: «с [дата] по [дата]». */
+export function PeriodFields({ from, to }: { from?: string; to?: string }) {
+  return (
+    <div className="text-sm">
+      <span className="mb-1 block font-medium text-slate-700">Период</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-slate-500">с</span>
+        <input type="date" name="from" defaultValue={from ?? ""} className={`${inputCls} w-[9.5rem] px-2`} />
+        <span className="text-xs text-slate-500">по</span>
+        <input type="date" name="to" defaultValue={to ?? ""} className={`${inputCls} w-[9.5rem] px-2`} />
+      </div>
+    </div>
+  );
+}
+
+/** Ряд области отбора: элементы раскладываются по колонкам, на телефоне — в столбик. */
+export function FilterRow({ children, cols = 3 }: { children: ReactNode; cols?: 2 | 3 | 4 }) {
+  const grid = cols === 2 ? "md:grid-cols-2" : cols === 4 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3";
+  return <div className={`grid items-start gap-3 ${grid}`}>{children}</div>;
+}
+
+/**
+ * Форма отбора отчёта. Элементы отбора размещаются рядами (FilterRow), под ними —
+ * кнопки «Сформировать» и «Очистить». «Очистить» сбрасывает все поля и списки
+ * (в том числе множественный выбор) и открывает отчёт без отбора.
+ * Выбранные значения multiple-select сериализуются в CSV-параметр адреса.
+ */
+export function ReportForm({ children, action, resetHref, keep = [] }: { children: ReactNode; action: string; /** адрес отчёта без отбора (по умолчанию — action) */ resetHref?: string; /** имена скрытых полей, которые не очищаются (например, режим отчёта) */ keep?: string[] }) {
   const router = useRouter();
+  function clear(form: HTMLFormElement) {
+    for (const el of Array.from(form.elements)) {
+      if (el instanceof HTMLInputElement) {
+        if (el.type === "hidden" && keep.includes(el.name)) continue;
+        if (el.type === "checkbox" || el.type === "radio") el.checked = false;
+        else if (el.type !== "hidden" && el.type !== "submit" && el.type !== "button") el.value = "";
+      } else if (el instanceof HTMLSelectElement) {
+        if (el.multiple) for (const o of Array.from(el.options)) o.selected = false;
+        else el.selectedIndex = 0;
+      } else if (el instanceof HTMLTextAreaElement) el.value = "";
+    }
+    router.push(resetHref ?? action);
+  }
   return (
     <form
-      className="no-print grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
+      className="no-print flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
@@ -109,8 +155,9 @@ export function ReportForm({ children, action }: { children: ReactNode; action: 
       }}
     >
       {children}
-      <div className="flex items-end gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
         <button className={btnCls}>Сформировать</button>
+        <button type="button" className={btnSecondaryCls} onClick={(e) => clear(e.currentTarget.form!)} title="Сбросить все поля отбора и списки">Очистить</button>
       </div>
     </form>
   );

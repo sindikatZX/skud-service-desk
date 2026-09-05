@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import {
   catalogItems, catalogCategories, warehouses, stockTransactions, equipmentUnits, stockDocuments, teams, tickets, clients, sites, users,
-  ticketWorks, ticketTypes,
+  ticketWorks, ticketTypes, workCatalog,
 } from "@/db/schema";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -326,6 +326,8 @@ export type WorkRow = {
 export async function worksReport(input: {
   period: Period;
   typeIds: number[];
+  /** id записей справочника работ */
+  workIds?: number[];
   q?: string;
   siteIds: number[];
   clientIds: number[];
@@ -339,6 +341,13 @@ export async function worksReport(input: {
   if (input.period.from) conds.push(gte(ticketWorks.createdAt, input.period.from));
   if (input.period.to) conds.push(lte(ticketWorks.createdAt, input.period.to));
   if (input.typeIds.length) conds.push(inArray(tickets.typeId, input.typeIds));
+  if (input.workIds?.length) {
+    // Работы из акта ссылаются на справочник (work_catalog_id); записи, внесённые до появления
+    // ссылки или набранные вручную, сопоставляются по точному наименованию.
+    const names = await db.select({ name: workCatalog.name }).from(workCatalog).where(inArray(workCatalog.id, input.workIds));
+    const byName = names.length ? inArray(ticketWorks.description, names.map((n) => n.name)) : undefined;
+    conds.push(byName ? or(inArray(ticketWorks.workCatalogId, input.workIds), byName)! : inArray(ticketWorks.workCatalogId, input.workIds));
+  }
   if (input.q?.trim()) conds.push(ilike(ticketWorks.description, `%${input.q.trim()}%`));
   if (input.siteIds.length) conds.push(inArray(tickets.siteId, input.siteIds));
   if (input.clientIds.length) conds.push(inArray(tickets.clientId, input.clientIds));

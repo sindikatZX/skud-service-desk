@@ -9,7 +9,8 @@ import { fmtQty, fmtDate, TX_LABELS } from "@/lib/labels";
 import { fmtMoney } from "@/lib/prices";
 import { movementsReport, parsePeriod, periodLabel, MOVEMENT_TYPES } from "@/lib/services/report-builder";
 import { movementsReportQuerySchema } from "@/lib/validators";
-import { ReportToolbar, SortTh, PrintHeader, PrintFooter, MultiSelect, ReportForm } from "../ReportKit";
+import { ReportToolbar, SortTh, PrintHeader, PrintFooter, MultiSelect, ReportForm, PeriodFields, FilterRow } from "../ReportKit";
+import { getBranding } from "@/lib/services/branding";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,10 @@ export default async function MovementsReportPage({ searchParams }: { searchPara
   const q = parsed.success ? parsed.data : movementsReportQuerySchema.parse({});
   const canPrices = canSeePrices(user);
   const canExport = canWithRole(user, "reports.export");
-  const [whs, items] = await Promise.all([
+  const [whs, items, branding] = await Promise.all([
     db.select({ id: warehouses.id, name: warehouses.name }).from(warehouses).where(eq(warehouses.isActive, true)).orderBy(asc(warehouses.sortOrder), asc(warehouses.name)),
     db.select({ id: catalogItems.id, name: catalogItems.name, sku: catalogItems.sku }).from(catalogItems).orderBy(asc(catalogItems.name)),
+    getBranding(),
   ]);
   const period = parsePeriod(q.from, q.to);
   const rep = await movementsReport({ types: q.types, period, itemIds: q.itemIds, q: q.q, warehouseIds: q.warehouseIds, sort: q.sort, dir: q.dir, limit: q.limit, canPrices });
@@ -40,26 +42,30 @@ export default async function MovementsReportPage({ searchParams }: { searchPara
       <PageHeader title="Движение товаров" subtitle="Поступления, перемещения, установки, списания и выдачи бригадам за период" action={<Link href="/reports" className="no-print text-sm text-indigo-600">← Все отчёты</Link>} />
       <Card className="no-print mb-4">
         <ReportForm action="/reports/movements">
-          <div className="grid gap-2">
-            <Field label="Период с"><input type="date" name="from" defaultValue={q.from ?? ""} className={inputCls} /></Field>
-            <Field label="по"><input type="date" name="to" defaultValue={q.to ?? ""} className={inputCls} /></Field>
-          </div>
-          <div>
-            <span className="mb-1 block text-sm font-medium text-slate-700">Виды движений (пусто — все)</span>
-            <div className="grid grid-cols-2 gap-1 text-sm">
-              {MOVEMENT_TYPES.map((t) => <label key={t} className="flex items-center gap-1.5"><input type="checkbox" name="types[]" value={t} defaultChecked={q.types.includes(t)} className="h-4 w-4" />{TX_LABELS[t]}</label>)}
+          {/* Ряд 1: период и виды движений */}
+          <FilterRow>
+            <PeriodFields from={q.from} to={q.to} />
+            <div className="md:col-span-2">
+              <span className="mb-1 block text-sm font-medium text-slate-700">Виды движений (пусто — все)</span>
+              <div className="grid grid-cols-2 gap-1 text-sm sm:grid-cols-3 lg:grid-cols-4">
+                {MOVEMENT_TYPES.map((t) => <label key={t} className="flex items-center gap-1.5"><input type="checkbox" name="types[]" value={t} defaultChecked={q.types.includes(t)} className="h-4 w-4" />{TX_LABELS[t]}</label>)}
+              </div>
             </div>
-          </div>
-          <MultiSelect name="warehouseIds[]" label="Склады (откуда или куда)" options={whs} selected={q.warehouseIds} />
-          <div className="grid gap-2">
-            <MultiSelect name="itemIds[]" label="Товары из списка" options={items.map((i) => ({ value: i.id, label: `${i.name} (${i.sku})` }))} selected={q.itemIds} size={4} />
+          </FilterRow>
+          {/* Ряд 2: поиск по наименованию */}
+          <FilterRow>
             <Field label="Или часть наименования"><input name="q" defaultValue={q.q ?? ""} className={inputCls} placeholder="кабель" /></Field>
-          </div>
+          </FilterRow>
+          {/* Ряд 3: списки складов и товаров — размер меняется за уголок */}
+          <FilterRow cols={2}>
+            <MultiSelect name="warehouseIds[]" label="Склады (откуда или куда)" options={whs} selected={q.warehouseIds} size={5} resizable />
+            <MultiSelect name="itemIds[]" label="Товары из списка" options={items.map((i) => ({ value: i.id, label: `${i.name} (${i.sku})` }))} selected={q.itemIds} size={5} resizable />
+          </FilterRow>
         </ReportForm>
       </Card>
 
       <Card className="print-area">
-        <PrintHeader title="Движение товаров" period={periodLabel(period)} filters={filters} user={user.fullName} />
+        <PrintHeader appName={branding.appName} title="Движение товаров" period={periodLabel(period)} filters={filters} user={user.fullName} />
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex flex-wrap gap-2 text-xs">
             {rep.byType.map((t) => <span key={t.type} className="rounded-full bg-slate-100 px-2 py-0.5">{t.label}: <b>{t.count}</b> опер., {fmtQty(t.quantity)} ед.</span>)}

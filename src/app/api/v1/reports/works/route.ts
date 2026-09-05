@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const GET = withAuth(async (req, { user }) => {
   if (!canWithRole(user, "reports.works") && !canWithRole(user, "reports.view")) throw forbidden("Нет права на отчёты по работам");
   const q = parseQuery(req, worksReportQuerySchema);
-  const rep = await worksReport({ period: parsePeriod(q.from, q.to), typeIds: q.typeIds, q: q.q, siteIds: q.siteIds, clientIds: q.clientIds, teamIds: q.teamIds, performerIds: q.performerIds, sort: q.sort, dir: q.dir, limit: q.limit });
+  const rep = await worksReport({ period: parsePeriod(q.from, q.to), typeIds: q.typeIds, workIds: q.workIds, q: q.q, siteIds: q.siteIds, clientIds: q.clientIds, teamIds: q.teamIds, performerIds: q.performerIds, sort: q.sort, dir: q.dir, limit: q.limit });
   if (q.format === "csv") {
     if (!canWithRole(user, "reports.export")) throw forbidden("Нет права на экспорт отчётов");
     return csvResponse(worksCsv(rep, q.mode), datedName(q.mode === "what" ? "raboty_chto" : "raboty_gde"));
