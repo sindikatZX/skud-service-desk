@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
-import { btnCls, btnSecondaryCls, inputCls } from "@/components/ui";
+import { btnCls, btnSecondaryCls, inputCls, btnFilterCls, btnFilterResetCls } from "@/components/ui";
 import { Icon } from "@/components/icons";
 
 /**
@@ -95,20 +95,8 @@ export function MultiSelect({ name, options: raw, selected, label, size = 5, res
   );
 }
 
-/** Компактный отбор по периоду в одну строку: «с [дата] по [дата]». */
-export function PeriodFields({ from, to }: { from?: string; to?: string }) {
-  return (
-    <div className="text-sm">
-      <span className="mb-1 block font-medium text-slate-700">Период</span>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-slate-500">с</span>
-        <input type="date" name="from" defaultValue={from ?? ""} className={`${inputCls} w-[9.5rem] px-2`} />
-        <span className="text-xs text-slate-500">по</span>
-        <input type="date" name="to" defaultValue={to ?? ""} className={`${inputCls} w-[9.5rem] px-2`} />
-      </div>
-    </div>
-  );
-}
+// Выбор периода — общий компонент интерфейса: одинаково выглядит и в отчётах, и в журналах.
+export { PeriodFields } from "@/components/ui";
 
 /** Ряд области отбора: элементы раскладываются по колонкам, на телефоне — в столбик. */
 export function FilterRow({ children, cols = 3 }: { children: ReactNode; cols?: 2 | 3 | 4 }) {
@@ -156,8 +144,8 @@ export function ReportForm({ children, action, resetHref, keep = [] }: { childre
     >
       {children}
       <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-        <button className={btnCls}>Сформировать</button>
-        <button type="button" className={btnSecondaryCls} onClick={(e) => clear(e.currentTarget.form!)} title="Сбросить все поля отбора и списки">Очистить</button>
+        <button className={btnFilterCls}>Сформировать</button>
+        <button type="button" className={btnFilterResetCls} onClick={(e) => clear(e.currentTarget.form!)} title="Сбросить все поля отбора и списки">Очистить</button>
       </div>
     </form>
   );

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/page-auth";
 import { listTickets } from "@/lib/services/tickets";
 import { listTeamsWithDetails } from "@/lib/services/teams";
-import { Card, PageHeader, StatusBadge, Table, Td, inputCls, Fab, Chips, Badge } from "@/components/ui";
+import { Card, PageHeader, StatusBadge, Table, Td, inputCls, Fab, Chips, Badge, btnFilterCls, btnFilterResetCls } from "@/components/ui";
 import { fmtDate, STATUS_LABELS } from "@/lib/labels";
 import { can } from "@/lib/rbac";
 
@@ -67,8 +67,8 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
               </select>
             ) : <div className="hidden sm:block" />}
             <div className="flex gap-2">
-              <button className="min-h-[2.5rem] flex-1 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Найти</button>
-              <Link href="/tickets" className="inline-flex min-h-[2.5rem] items-center rounded-xl border border-slate-300 px-4 py-2 text-sm">Сброс</Link>
+              <button className={`${btnFilterCls} flex-1`}>Применить</button>
+              <Link href="/tickets" className={btnFilterResetCls}>Сбросить</Link>
             </div>
           </form>
         </Card>

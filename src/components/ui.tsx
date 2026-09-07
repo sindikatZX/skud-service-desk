@@ -115,6 +115,17 @@ export function Chips({ items }: { items: { href: string; label: string; active?
   );
 }
 
+/**
+ * Кнопки панели отбора. Вынесены отдельно от btnCls, потому что применение фильтра —
+ * действие повторяемое и вспомогательное: основной акцент (индиго) остаётся за
+ * созданием записи, иначе на странице конкурируют две «главные» кнопки.
+ * Один стиль на все панели — раньше каждая страница описывала кнопки по-своему.
+ */
+export const btnFilterCls =
+  "inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50";
+export const btnFilterResetCls =
+  "inline-flex min-h-[2.5rem] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50";
+
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block text-sm">
@@ -122,6 +133,43 @@ export function Field({ label, children, hint }: { label: string; children: Reac
       {children}
       {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
     </label>
+  );
+}
+
+/**
+ * Единый выбор периода: подпись «Период», под ней «с [дата] по [дата]» в одну строку.
+ *
+ * Поля намеренно тянутся (`flex-1 min-w-0`), а не имеют фиксированной ширины: в узкой
+ * колонке фильтра они сжимаются, но остаются в строке. Раньше при фиксированной ширине
+ * пара полей не помещалась и переносилась — один и тот же отбор выглядел то строкой,
+ * то столбиком на разных экранах.
+ *
+ * Контролу нужно не меньше ~280 px: иначе «дд.мм.гггг» с иконкой календаря не помещается
+ * и обрезается. В многоколоночных сетках отдавайте ему две колонки через `className`.
+ */
+export function PeriodFields({
+  from,
+  to,
+  label = "Период",
+  names = { from: "from", to: "to" },
+  className = "",
+}: {
+  from?: string;
+  to?: string;
+  label?: string;
+  names?: { from: string; to: string };
+  className?: string;
+}) {
+  return (
+    <div className={`text-sm ${className}`}>
+      <span className="mb-1 block font-medium text-slate-700">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="shrink-0 text-xs text-slate-500">с</span>
+        <input type="date" name={names.from} defaultValue={from ?? ""} aria-label={`${label}: с`} className={`${inputCls} min-w-0 flex-1 px-2`} />
+        <span className="shrink-0 text-xs text-slate-500">по</span>
+        <input type="date" name={names.to} defaultValue={to ?? ""} aria-label={`${label}: по`} className={`${inputCls} min-w-0 flex-1 px-2`} />
+      </div>
+    </div>
   );
 }
 

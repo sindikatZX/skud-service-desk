@@ -5,7 +5,7 @@ import { listTeamsWithDetails } from "@/lib/services/teams";
 import { db } from "@/db";
 import { clients } from "@/db/schema";
 import { asc } from "drizzle-orm";
-import { Card, PageHeader, Table, Td, inputCls } from "@/components/ui";
+import { Card, PageHeader, Table, Td, inputCls, btnFilterCls, btnFilterResetCls } from "@/components/ui";
 import { fmtDate, fmtQty, TX_LABELS, LOC_LABELS } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
           <select name="teamId" defaultValue={sp.teamId ?? ""} className={inputCls}><option value="">Все бригады</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
           <select name="clientId" defaultValue={sp.clientId ?? ""} className={inputCls}><option value="">Все клиенты</option>{clientRows.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
           <input name="ticketId" defaultValue={sp.ticketId ?? ""} placeholder="ID заявки" className={inputCls} />
-          <div className="flex gap-2"><button className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Фильтр</button><Link href="/inventory/transactions" className="rounded-xl border border-slate-300 px-4 py-2 text-sm">Сброс</Link></div>
+          <div className="flex gap-2"><button className={btnFilterCls}>Применить</button><Link href="/inventory/transactions" className={btnFilterResetCls}>Сбросить</Link></div>
         </form>
       </Card>
       <Card>

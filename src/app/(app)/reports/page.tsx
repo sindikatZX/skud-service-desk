@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/page-auth";
 import { can, canWithRole } from "@/lib/rbac";
 import { dashboardSummary, employeeWorkload, inventoryConsumption, clientsReport, teamsStockSummary } from "@/lib/services/reports";
 import { listTeamsWithDetails } from "@/lib/services/teams";
-import { Card, PageHeader, Table, Td, inputCls } from "@/components/ui";
+import { Card, PageHeader, Table, Td, inputCls, Field, PeriodFields, btnFilterCls, btnFilterResetCls } from "@/components/ui";
 import { STATUS_LABELS, fmtQty } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -62,11 +62,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         ))}
       </div>
       <Card className="mb-4">
-        <form className="flex flex-wrap items-end gap-2 text-sm">
-          <label className="flex items-center gap-1.5"><span className="text-xs text-slate-500">с</span><input type="date" name="from" defaultValue={sp.from ?? ""} className={`${inputCls} w-[9.5rem] px-2`} /></label>
-          <label className="flex items-center gap-1.5"><span className="text-xs text-slate-500">по</span><input type="date" name="to" defaultValue={sp.to ?? ""} className={`${inputCls} w-[9.5rem] px-2`} /></label>
-          <select name="teamId" defaultValue={sp.teamId ?? ""} className={`${inputCls} w-auto min-w-[10rem]`}><option value="">Все бригады</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-          <div className="flex gap-2"><button className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Сформировать</button><Link href="/reports" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm">Очистить</Link></div>
+        <form className="flex flex-wrap items-end gap-3 text-sm">
+          <PeriodFields from={sp.from} to={sp.to} className="w-full sm:w-[22rem]" />
+          <Field label="Бригада">
+            <select name="teamId" defaultValue={sp.teamId ?? ""} className={`${inputCls} w-auto min-w-[10rem]`}><option value="">Все бригады</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+          </Field>
+          <div className="flex gap-2"><button className={btnFilterCls}>Сформировать</button><Link href="/reports" className={btnFilterResetCls}>Очистить</Link></div>
         </form>
       </Card>
 

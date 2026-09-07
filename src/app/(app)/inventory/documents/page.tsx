@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/page-auth";
 import { listDocuments } from "@/lib/services/inventory";
 import { listWarehouses } from "@/lib/services/warehouses";
-import { Card, PageHeader, Table, Td, Badge, inputCls } from "@/components/ui";
+import { Card, PageHeader, Table, Td, Badge, inputCls, Field, PeriodFields, btnFilterCls, btnFilterResetCls } from "@/components/ui";
 import { fmtDate, fmtQty, DOC_TYPE_LABELS } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -20,13 +20,18 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
     <div>
       <PageHeader title="Складские документы" subtitle={`Поступления (партии), перемещения и списания · ${rows.length} документов`} action={<Link href="/inventory" className="text-sm text-indigo-600">← Склады</Link>} />
       <Card className="mb-4">
-        <form className="grid gap-2 sm:grid-cols-6">
-          <select name="type" defaultValue={sp.type ?? ""} className={inputCls}><option value="">Все типы</option>{Object.entries(DOC_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-          <select name="warehouseId" defaultValue={sp.warehouseId ?? ""} className={inputCls}><option value="">Все склады</option>{whs.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select>
-          <input name="from" type="date" defaultValue={sp.from ?? ""} className={inputCls} />
-          <input name="to" type="date" defaultValue={sp.to ?? ""} className={inputCls} />
-          <input name="q" defaultValue={sp.q ?? ""} placeholder="№ документа / поставщик" className={inputCls} />
-          <div className="flex gap-2"><button className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Фильтр</button><Link href="/inventory/documents" className="rounded-xl border border-slate-300 px-4 py-2 text-sm">Сброс</Link></div>
+        <form className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Field label="Тип документа">
+            <select name="type" defaultValue={sp.type ?? ""} className={inputCls}><option value="">Все типы</option>{Object.entries(DOC_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+          </Field>
+          <Field label="Склад">
+            <select name="warehouseId" defaultValue={sp.warehouseId ?? ""} className={inputCls}><option value="">Все склады</option>{whs.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select>
+          </Field>
+          <PeriodFields from={sp.from} to={sp.to} className="sm:col-span-2" />
+          <Field label="Поиск">
+            <input name="q" defaultValue={sp.q ?? ""} placeholder="№ документа / поставщик" className={inputCls} />
+          </Field>
+          <div className="flex gap-2 sm:col-span-2 xl:col-span-4"><button className={btnFilterCls}>Применить</button><Link href="/inventory/documents" className={btnFilterResetCls}>Сбросить</Link></div>
         </form>
       </Card>
       <Card>
