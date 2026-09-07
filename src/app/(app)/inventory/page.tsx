@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { catalogItems, catalogCategories } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { can, canWithRole } from "@/lib/rbac";
 import { getStockByWarehouse, warehousesSummary } from "@/lib/services/inventory";
 import { PageHeader, Stat } from "@/components/ui";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function InventoryPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser(["inventory.read.all"]);
+  await requireModule("inventory");
   const sp = await searchParams;
   const whs = await warehousesSummary();
   const requested = Number(sp.wh);

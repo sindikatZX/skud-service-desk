@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { listTeamsWithDetails } from "@/lib/services/teams";
 import { getStock, listTransactions } from "@/lib/services/inventory";
 import { listTickets } from "@/lib/services/tickets";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MyTeamPage() {
   const user = await requireUser(["inventory.read.team"]);
+  await requireModule("teams");
   if (!user.teamId) return <div><PageHeader title="Моя бригада" /><Empty text="Вы не состоите в бригаде. Обратитесь к администратору." /></div>;
   const [team, stock, today, tx] = await Promise.all([
     listTeamsWithDetails().then((all) => all.find((t) => t.id === user.teamId)),

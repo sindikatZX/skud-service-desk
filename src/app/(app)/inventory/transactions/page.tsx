@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { listTransactions } from "@/lib/services/inventory";
 import { listTeamsWithDetails } from "@/lib/services/teams";
 import { db } from "@/db";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TransactionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser(["inventory.read.all", "inventory.read.team"]);
+  await requireModule("inventory");
   const sp = await searchParams;
   const n = (k: string) => (sp[k] ? Number(sp[k]) : undefined);
   const teamScope = user.scope === "team" ? (user.teamId ?? -1) : n("teamId");

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { isModuleEnabled, DEFAULT_INSTALLATION, type Installation } from "@/lib/services/setup";
+import type { ModuleId } from "@/lib/modules";
 import type { ReactNode } from "react";
 import type { SessionUser } from "@/lib/auth";
 import { can, canAnyWithRole } from "@/lib/rbac";
@@ -10,31 +12,46 @@ import type { Branding } from "@/lib/services/branding";
 
 export type NavItem = { href: string; label: string; icon: IconName; short?: string };
 
-export function navFor(user: SessionUser): NavItem[] {
+/**
+ * Разделы навигации. Показываются только те, что дал включённый модуль и разрешает
+ * роль: одна и та же система у сервисной компании и у салона выглядит по-разному.
+ * Подписи разделов может переопределять отраслевая заготовка (например, «Заявки»
+ * становятся «Записями»).
+ */
+export function navFor(user: SessionUser, installation: Installation = DEFAULT_INSTALLATION): NavItem[] {
   const items: NavItem[] = [];
   const isClient = user.scope === "client";
   const isField = user.scope === "team";
+  const on = (id: ModuleId) => isModuleEnabled(installation, id);
+
   if (!isClient) items.push({ href: "/", label: "Главная", icon: "home" });
-  items.push({ href: "/tickets", label: "Заявки", icon: "tickets" });
-  if (isField) items.push({ href: "/my-team", label: "Моя бригада", icon: "team", short: "Бригада" });
-  if (can(user, "clients.read") && !isField) items.push({ href: "/clients", label: "Клиенты", icon: "clients" });
-  if (can(user, "teams.read") && !isField) items.push({ href: "/teams", label: "Бригады", icon: "truck" });
-  if (can(user, "inventory.read.all")) items.push({ href: "/inventory", label: "Склад", icon: "warehouse" });
-  if (can(user, "catalog.read") && !isField) items.push({ href: "/catalog", label: "Товары", icon: "catalog", short: "Товары" });
+  if (on("tickets")) items.push({ href: "/tickets", label: "Заявки", icon: "tickets" });
+  if (on("teams") && isField) items.push({ href: "/my-team", label: "Моя бригада", icon: "team", short: "Бригада" });
+  if (on("clients") && can(user, "clients.read") && !isField) items.push({ href: "/clients", label: "Клиенты", icon: "clients" });
+  if (on("teams") && can(user, "teams.read") && !isField) items.push({ href: "/teams", label: "Бригады", icon: "truck" });
+  if (on("inventory") && can(user, "inventory.read.all")) items.push({ href: "/inventory", label: "Склад", icon: "warehouse" });
+  if (on("catalog") && can(user, "catalog.read") && !isField) items.push({ href: "/catalog", label: "Товары", icon: "catalog", short: "Товары" });
   if (can(user, "users.manage")) items.push({ href: "/employees", label: "Сотрудники", icon: "users", short: "Люди" });
   if (can(user, "directories.manage")) items.push({ href: "/directories", label: "Справочники", icon: "settings", short: "Настройки" });
-  if (canAnyWithRole(user, ["reports.view", "reports.inventory", "reports.stock", "reports.movements", "reports.works"])) items.push({ href: "/reports", label: "Отчёты", icon: "chart" });
+  if (on("reports") && canAnyWithRole(user, ["reports.view", "reports.inventory", "reports.stock", "reports.movements", "reports.works"]))
+    items.push({ href: "/reports", label: "Отчёты", icon: "chart" });
   if (canAnyWithRole(user, ["admin.backup", "admin.maintenance"])) items.push({ href: "/admin", label: "Администрирование", icon: "shield", short: "Админ" });
   items.push({ href: "/profile", label: "Моя учётная запись", icon: "user", short: "Профиль" });
-  return items;
+
+  // Отраслевые названия разделов
+  return items.map((it) => {
+    const label = installation.labels?.[it.href];
+    return label ? { ...it, label, short: label.length > 12 ? it.short : label } : it;
+  });
 }
 
+/** Инициалы для аватара: две первые буквы имени. */
 export function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
 }
 
-export function AppShell({ user, branding, children }: { user: SessionUser; branding: Branding; children: ReactNode }) {
-  const items = navFor(user);
+export function AppShell({ user, branding, installation = DEFAULT_INSTALLATION, children }: { user: SessionUser; branding: Branding; installation?: Installation; children: ReactNode }) {
+  const items = navFor(user, installation);
   const homeHref = user.scope === "client" ? "/tickets" : "/";
   const profile = { fullName: user.fullName, roleName: user.roleName, email: user.email, initials: initials(user.fullName) };
 

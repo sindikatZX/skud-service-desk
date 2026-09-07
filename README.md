@@ -32,6 +32,7 @@ docker compose up -d --build
 | 8 | [План развития: нативные приложения и офлайн](docs/08-roadmap.md) |
 | 9 | [Справочники, чат и удаление записей](docs/09-directories-chat-deletion.md) |
 | 11 | [Набор интерфейсных примитивов](docs/11-ui-kit.md) |
+| 12 | [Модули и настройка под заказчика](docs/12-modules.md) |
 | 10 | [PWA и мобильная версия](docs/10-pwa-mobile.md) |
 
 История доработок — в [CHANGELOG.md](CHANGELOG.md).

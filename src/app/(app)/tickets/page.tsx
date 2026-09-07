@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { listTickets } from "@/lib/services/tickets";
 import { listTeamsWithDetails } from "@/lib/services/teams";
 import { Card, PageHeader, Table, Td, inputCls, Fab, Chips, Badge, btnFilterCls, btnFilterResetCls } from "@/components/ui";
@@ -20,6 +20,7 @@ function buildHref(base: Record<string, string | undefined>, patch: Record<strin
 
 export default async function TicketsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser(["tickets.read.all", "tickets.read.own"]);
+  await requireModule("tickets");
   const sp = await searchParams;
   const filters = { q: sp.q, teamId: sp.teamId, status: sp.status, overdue: sp.overdue };
   const [rows, teams] = await Promise.all([

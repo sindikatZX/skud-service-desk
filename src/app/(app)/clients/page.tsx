@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { clients, sites, tickets } from "@/db/schema";
 import { sql, asc } from "drizzle-orm";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { can } from "@/lib/rbac";
 import { Card, PageHeader, Table, Td } from "@/components/ui";
 import { CsvImport } from "@/components/CsvImport";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientsPage() {
   const user = await requireUser(["clients.read"]);
+  await requireModule("clients");
   const rows = await db
     .select({
       id: clients.id, name: clients.name, contactPerson: clients.contactPerson, phone: clients.phone, email: clients.email, isActive: clients.isActive,

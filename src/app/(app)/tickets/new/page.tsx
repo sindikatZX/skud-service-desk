@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { clients, sites } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { can } from "@/lib/rbac";
 import { listTeamsWithDetails } from "@/lib/services/teams";
 import { getFormDictionaries } from "@/lib/services/directories";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NewTicketPage() {
   const user = await requireUser(["tickets.create"]);
+  await requireModule("tickets");
   const clientRows = await db
     .select({ id: clients.id, name: clients.name })
     .from(clients)

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { listDocuments } from "@/lib/services/inventory";
 import { listWarehouses } from "@/lib/services/warehouses";
 import { Card, PageHeader, Table, Td, Badge, inputCls, Field, PeriodFields, btnFilterCls, btnFilterResetCls } from "@/components/ui";
@@ -11,6 +11,7 @@ const TONE: Record<string, "green" | "indigo" | "rose"> = { receipt: "green", tr
 
 export default async function DocumentsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await requireUser(["inventory.read.all", "inventory.read.team"]);
+  await requireModule("inventory");
   const sp = await searchParams;
   const [rows, whs] = await Promise.all([
     listDocuments({ type: sp.type || undefined, warehouseId: sp.warehouseId ? Number(sp.warehouseId) : undefined, from: sp.from ? new Date(sp.from) : null, to: sp.to ? new Date(sp.to + "T23:59:59") : null, q: sp.q || undefined, limit: 500 }),

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { warehouses, catalogCategories } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { canSeePrices, canWithRole } from "@/lib/rbac";
 import { Card, PageHeader, Field, inputCls, Table, thCls, tdCls } from "@/components/ui";
 import { fmtQty } from "@/lib/labels";
@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function StockReportPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser(["reports.stock", "reports.inventory"]);
+  await requireModule("reports");
   const sp = await searchParams;
   const parsed = stockReportQuerySchema.safeParse(sp);
   const q = parsed.success ? parsed.data : stockReportQuerySchema.parse({});

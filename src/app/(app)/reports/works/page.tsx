@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { ticketTypes, sites, clients, teams, users, roles, workCatalog } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { canWithRole } from "@/lib/rbac";
 import { Card, PageHeader, Field, inputCls, Table, thCls, tdCls, SummaryList } from "@/components/ui";
 import { fmtQty, fmtDate } from "@/lib/labels";
@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function WorksReportPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser(["reports.works", "reports.view"]);
+  await requireModule("reports");
   const sp = await searchParams;
   const parsed = worksReportQuerySchema.safeParse(sp);
   const q = parsed.success ? parsed.data : worksReportQuerySchema.parse({});

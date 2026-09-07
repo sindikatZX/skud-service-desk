@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { can, canWithRole } from "@/lib/rbac";
 import { dashboardSummary, employeeWorkload, inventoryConsumption, clientsReport, teamsStockSummary } from "@/lib/services/reports";
 import { listTeamsWithDetails } from "@/lib/services/teams";
@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser(["reports.view", "reports.inventory", "reports.stock", "reports.movements", "reports.works"]);
+  await requireModule("reports");
   const sp = await searchParams;
   const from = sp.from ? new Date(sp.from) : undefined;
   const to = sp.to ? new Date(sp.to + "T23:59:59") : undefined;

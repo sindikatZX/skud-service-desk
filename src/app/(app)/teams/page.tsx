@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { can } from "@/lib/rbac";
 import { listTeamsWithDetails } from "@/lib/services/teams";
 import { teamsStockSummary } from "@/lib/services/reports";
@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TeamsPage() {
   const user = await requireUser(["teams.read"]);
+  await requireModule("teams");
   const [teams, stock, load] = await Promise.all([
     listTeamsWithDetails(),
     can(user, "inventory.read.all") ? teamsStockSummary() : Promise.resolve([]),

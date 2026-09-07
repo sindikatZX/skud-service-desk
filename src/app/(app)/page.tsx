@@ -1,17 +1,21 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getInstallation } from "@/lib/services/setup";
 import { requireUser } from "@/lib/page-auth";
 import { dashboardSummary, teamsStockSummary } from "@/lib/services/reports";
 import { listTickets } from "@/lib/services/tickets";
 import { Card, PageHeader, Stat, Table, Td, Fab } from "@/components/ui";
 import { StatusBadge } from "@/components/status-badges";
 import { fmtDate } from "@/lib/labels";
-import { can } from "@/lib/rbac";
+import { can, canAnyWithRole } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   const user = await requireUser([]);
+  // Свежая установка: администратора ведём в мастер настройки, остальных — не трогаем
+  const installation = await getInstallation();
+  if (!installation.configured && canAnyWithRole(user, ["admin.maintenance", "users.manage"])) redirect("/setup");
   if (user.scope !== "all") redirect("/tickets");
   const [summary, active, overdue, teamStock] = await Promise.all([
     dashboardSummary(),

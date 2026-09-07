@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { catalogItems } from "@/db/schema";
 import { asc } from "drizzle-orm";
-import { requireUser } from "@/lib/page-auth";
+import { requireUser, requireModule } from "@/lib/page-auth";
 import { can, canWithRole, canSeePrices, canEditPrices } from "@/lib/rbac";
 import { PageHeader } from "@/components/ui";
 import { getFormDictionaries } from "@/lib/services/directories";
@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CatalogPage() {
   const user = await requireUser(["catalog.read"]);
+  await requireModule("catalog");
   const manage = can(user, "catalog.manage");
   const showPrices = canSeePrices(user);
   const editPrices = canEditPrices(user);
