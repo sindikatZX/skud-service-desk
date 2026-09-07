@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ConfirmProvider } from "@/components/dialog";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { AppShell } from "@/components/AppShell";
@@ -10,5 +11,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const branding = await getBranding();
-  return <AppShell user={user} branding={branding}>{children}</AppShell>;
+  return <AppShell user={user} branding={branding}><ConfirmProvider>{children}</ConfirmProvider>
+    </AppShell>;
 }

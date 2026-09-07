@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
+import { useConfirm } from "@/components/dialog";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
-import { Card, Table, Td, Badge, Field, inputCls, btnCls, btnSecondaryCls } from "@/components/ui";
+import { Card, Table, Td, Badge, Field, inputCls, btnCls, btnSecondaryCls, FormMessage } from "@/components/ui";
 import { CsvImport } from "@/components/CsvImport";
 
 export type DictField = {
@@ -58,6 +59,7 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const confirm = useConfirm();
 
   async function run(fn: () => Promise<unknown>, okText: string) {
     setBusy(true); setMsg(null);
@@ -135,7 +137,7 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
       title={`Записей: ${rows.length}`}
       action={!adding && <button className={btnCls} onClick={() => { setAdding(true); setEditing(null); }}>+ Добавить</button>}
     >
-      {msg && <div className={`mb-3 rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}</div>}
+      {msg && <div className="mb-3"><FormMessage ok={msg.ok} onHide={() => setMsg(null)}>{msg.text}</FormMessage></div>}
       {importEntity && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <CsvImport entity={importEntity} compact />
@@ -193,8 +195,8 @@ export function DirectoryManager({ dict, rows, extraFields = [], usageLabel, cod
                   <button
                     className="text-xs text-rose-600 hover:underline disabled:opacity-50"
                     disabled={busy}
-                    onClick={() => {
-                      if (!window.confirm(`Удалить «${r.name}»?${r.usedBy ? `\n\nЗапись используется ${r.usedBy} раз — удаление будет отклонено.` : ""}`)) return;
+                    onClick={async () => {
+                      if (!(await confirm({ title: "Удалить запись справочника?", text: `«${r.name}»${r.usedBy ? `\n\nЗапись используется ${r.usedBy} раз — удаление будет отклонено.` : ""}`, danger: true, confirmLabel: "Удалить" }))) return;
                       run(() => api(`/directories/${dict}/${r.id}`, { method: "DELETE" }), "Запись удалена");
                     }}
                   >

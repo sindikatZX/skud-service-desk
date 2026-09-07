@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { useConfirm } from "@/components/dialog";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
 import { Card, Field, inputCls, btnCls, btnSecondaryCls } from "@/components/ui";
@@ -41,6 +42,7 @@ export function BrandingPanel({ branding, presets }: Props) {
   const [logo, setLogo] = useState<string | null>(branding.logoDataUrl);
   const [bg, setBg] = useState<string | null>(branding.loginBgDataUrl);
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const bgRef = useRef<HTMLInputElement>(null);
@@ -67,7 +69,7 @@ export function BrandingPanel({ branding, presets }: Props) {
   }
 
   async function reset() {
-    if (!window.confirm("Вернуть стандартное оформление (название, цвет, логотип)?")) return;
+    if (!(await confirm({ title: "Вернуть стандартное оформление?", text: "Название, цвет и логотип вернутся к значениям по умолчанию.", danger: true, confirmLabel: "Продолжить" }))) return;
     setBusy(true); setMsg(null);
     try {
       const b = await api<Branding>("/admin/branding", { method: "DELETE" });

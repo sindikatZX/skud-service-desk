@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
+import { useConfirm } from "@/components/dialog";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
-import { Card, Field, inputCls, btnCls, btnSecondaryCls, btnDangerCls } from "@/components/ui";
+import { Card, Field, inputCls, btnCls, btnSecondaryCls, btnDangerCls, FormMessage } from "@/components/ui";
 import { STATUS_LABELS, toLocalInput } from "@/lib/labels";
 
 type Props = {
@@ -31,6 +32,7 @@ export function TicketActions({ ticket, allowed, perms, types, priorities, isClo
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const confirm = useConfirm();
 
   async function run(fn: () => Promise<unknown>, okText = "Сохранено") {
     setBusy(true); setMsg(null);
@@ -53,7 +55,7 @@ export function TicketActions({ ticket, allowed, perms, types, priorities, isClo
   ].filter((t) => t.show) as { k: typeof tab; l: string }[];
 
   async function removeTicket() {
-    if (!window.confirm("Удалить заявку вместе с историей статусов, работами и чатом?\n\nЕсли по заявке есть резервы или установленное оборудование, удаление будет отклонено.")) return;
+    if (!(await confirm({ title: "Удалить заявку?", text: "Будут удалены история статусов, работы и чат.\n\nЕсли по заявке есть резервы или установленное оборудование, удаление будет отклонено.", danger: true, confirmLabel: "Удалить" }))) return;
     setBusy(true); setMsg(null);
     try {
       await api(`/tickets/${ticket.id}`, { method: "DELETE" });
@@ -72,7 +74,7 @@ export function TicketActions({ ticket, allowed, perms, types, priorities, isClo
           <button key={t.k} type="button" onClick={() => setTab(t.k)} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium ${tab === t.k ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700 active:bg-slate-200"}`}>{t.l}</button>
         ))}
       </div>
-      {msg && <div className={`mb-3 rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}</div>}
+      {msg && <div className="mb-3"><FormMessage ok={msg.ok} onHide={() => setMsg(null)}>{msg.text}</FormMessage></div>}
 
       {tab === "status" && (
         <div className="space-y-2">

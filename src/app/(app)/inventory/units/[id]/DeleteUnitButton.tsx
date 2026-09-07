@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useConfirm } from "@/components/dialog";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
 
@@ -11,11 +12,12 @@ export function DeleteUnitButton({ unitId, serialNumber, status }: { unitId: num
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   if (status === "installed") return null;
 
   async function remove() {
-    if (!window.confirm(`Удалить единицу ${serialNumber} вместе с её складскими проводками?\n\nИспользуйте это только для исправления ошибки приёмки.`)) return;
+    if (!(await confirm({ title: "Удалить единицу оборудования?", text: `${serialNumber} — вместе с её складскими проводками.\n\nИспользуйте это только для исправления ошибки приёмки.`, danger: true, confirmLabel: "Удалить" }))) return;
     setBusy(true); setErr(null);
     try {
       await api(`/inventory/units/${unitId}`, { method: "DELETE" });

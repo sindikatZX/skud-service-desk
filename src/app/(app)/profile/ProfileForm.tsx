@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
-import { Card, Field, inputCls, btnCls } from "@/components/ui";
+import { Card, Field, inputCls, btnCls, FormMessage } from "@/components/ui";
 
 type Me = { fullName: string; email: string; phone: string | null };
 
@@ -20,7 +20,7 @@ export function ProfileForm({ me }: { me: Me }) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      {msg && <div className={`lg:col-span-2 rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}</div>}
+      {msg && <div className="lg:col-span-2"><FormMessage ok={msg.ok} onHide={() => setMsg(null)}>{msg.text}</FormMessage></div>}
       <Card title="Личные данные">
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); run({ fullName: fd.get("fullName"), phone: fd.get("phone") || null }, "Данные сохранены"); }}>
           <Field label="ФИО"><input name="fullName" className={inputCls} required defaultValue={me.fullName} /></Field>

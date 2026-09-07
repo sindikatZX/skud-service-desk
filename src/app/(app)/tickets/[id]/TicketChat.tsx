@@ -3,6 +3,7 @@
    и приватные файлы из /api/v1/files/[id] с проверкой доступа. Оптимизатор next/image
    не работает с blob: и не должен кэшировать файлы, закрытые правами доступа. */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useConfirm } from "@/components/dialog";
 import { api } from "@/lib/client-api";
 import { Card, inputCls, btnCls } from "@/components/ui";
 import { fmtDate, fmtBytes } from "@/lib/labels";
@@ -50,6 +51,7 @@ export function TicketChat({ ticketId, initial, canWrite, canInternal, readOnly 
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const confirm = useConfirm();
   const [viewer, setViewer] = useState<Attachment | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -138,7 +140,7 @@ export function TicketChat({ ticketId, initial, canWrite, canInternal, readOnly 
   }
 
   async function remove(id: number) {
-    if (!window.confirm("Удалить сообщение вместе с вложениями?")) return;
+    if (!(await confirm({ title: "Удалить сообщение?", text: "Сообщение будет удалено вместе с вложениями.", danger: true, confirmLabel: "Удалить" }))) return;
     try {
       await api(`/tickets/${ticketId}/chat/${id}`, { method: "DELETE" });
       setMessages((prev) => prev.filter((m) => m.id !== id));

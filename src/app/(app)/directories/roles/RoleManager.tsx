@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
+import { useConfirm } from "@/components/dialog";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
-import { Card, Table, Td, Badge, Field, inputCls, btnCls, btnSecondaryCls } from "@/components/ui";
+import { Card, Table, Td, Badge, Field, inputCls, btnCls, btnSecondaryCls, FormMessage } from "@/components/ui";
 import { PERMISSION_GROUPS, SCOPE_LABELS } from "@/lib/rbac";
 
 export type RoleRow = {
@@ -28,6 +29,7 @@ export function RoleManager({ roles }: { roles: RoleRow[] }) {
   const [editing, setEditing] = useState<RoleRow | "new" | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const confirm = useConfirm();
 
   async function run(fn: () => Promise<unknown>, okText: string) {
     setBusy(true); setMsg(null);
@@ -133,7 +135,7 @@ export function RoleManager({ roles }: { roles: RoleRow[] }) {
 
   return (
     <div className="space-y-4">
-      {msg && <div className={`rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}</div>}
+      {msg && <FormMessage ok={msg.ok} onHide={() => setMsg(null)}>{msg.text}</FormMessage>}
 
       {editing === "new" ? (
         <Card title="Новая роль">{form("new")}</Card>
@@ -163,8 +165,8 @@ export function RoleManager({ roles }: { roles: RoleRow[] }) {
                   <button
                     className="text-xs text-rose-600 hover:underline disabled:opacity-50"
                     disabled={busy}
-                    onClick={() => {
-                      if (!window.confirm(`Удалить роль «${r.name}»?${r.usedBy ? `\n\nРоль назначена ${r.usedBy} сотрудникам — удаление будет отклонено.` : ""}`)) return;
+                    onClick={async () => {
+                      if (!(await confirm({ title: "Удалить роль?", text: `«${r.name}»${r.usedBy ? `\n\nРоль назначена ${r.usedBy} сотрудникам — удаление будет отклонено.` : ""}`, danger: true, confirmLabel: "Удалить" }))) return;
                       run(() => api(`/directories/roles/${r.id}`, { method: "DELETE" }), "Роль удалена");
                     }}
                   >

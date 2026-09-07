@@ -344,6 +344,31 @@ export function PeriodFields({
   );
 }
 
+/**
+ * Результат отправки формы или действия: успех или ошибка. Раньше эта разметка была
+ * скопирована в каждой форме, и сообщения отличались отступами и цветом.
+ */
+export function FormMessage({ ok, children, onHide }: { ok: boolean; children: ReactNode; onHide?: () => void }) {
+  return (
+    <div
+      role={ok ? "status" : "alert"}
+      className={`rounded-xl px-3 py-2 text-sm ${ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}
+    >
+      {children}
+      {onHide && (
+        <button type="button" className="ml-2 underline opacity-80 hover:opacity-100" onClick={onHide}>
+          скрыть
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Ряд кнопок формы: основное действие слева, отмена рядом. */
+export function FormActions({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`flex flex-wrap items-center gap-2 ${className}`}>{children}</div>;
+}
+
 export function Empty({ text = "Нет данных" }: { text?: string }) {
   return <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">{text}</div>;
 }

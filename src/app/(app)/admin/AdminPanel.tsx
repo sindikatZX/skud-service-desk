@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useConfirm } from "@/components/dialog";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
 import { Card, Table, Td, Badge, Field, inputCls, btnCls, btnSecondaryCls, btnDangerCls } from "@/components/ui";
@@ -21,6 +22,7 @@ const REASON: Record<string, string> = { manual: "вручную", auto: "авт
 export function AdminPanel({ canBackup, canMaint, backupDir, backups, stats, integrity }: { canBackup: boolean; canMaint: boolean; backupDir: string; backups: Backup[]; stats: Stats; integrity: Integrity }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const askConfirm = useConfirm();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [note, setNote] = useState("");
   const [restoreId, setRestoreId] = useState<number | null>(null);
@@ -85,7 +87,7 @@ export function AdminPanel({ canBackup, canMaint, backupDir, backups, stats, int
                   <div className="flex items-center gap-3 text-xs">
                     {b.exists && <a href={`/api/v1/admin/backups/${b.id}`} className="text-indigo-600 hover:underline">скачать</a>}
                     {b.exists && <button className="text-amber-700 hover:underline" onClick={() => { setRestoreId(b.id); setConfirm(""); }}>восстановить</button>}
-                    <button className="text-rose-600 hover:underline" disabled={busy !== null} onClick={() => { if (window.confirm(`Удалить копию ${b.fileName}?`)) run("del", async () => { await api(`/admin/backups/${b.id}`, { method: "DELETE" }); return "Копия удалена"; }); }}>удалить</button>
+                    <button className="text-rose-600 hover:underline" disabled={busy !== null} onClick={async () => { if ((await askConfirm({ title: "Удалить резервную копию?", text: `${b.fileName}`, danger: true, confirmLabel: "Удалить" }))) run("del", async () => { await api(`/admin/backups/${b.id}`, { method: "DELETE" }); return "Копия удалена"; }); }}>удалить</button>
                   </div>
                 </Td>
               </tr>
@@ -115,7 +117,7 @@ export function AdminPanel({ canBackup, canMaint, backupDir, backups, stats, int
             <p className="mb-3 text-sm text-slate-600">Проверяются ссылки между таблицами без внешних ключей, соответствие статусов серийных единиц местам хранения, отрицательные остатки, зависшие резервы, счётчики документов, коды справочников и наличие складов бригад. Исправление выполняется после автоматической резервной копии.</p>
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <button className={btnSecondaryCls} disabled={busy !== null} onClick={() => run("check", async () => { const r = await api<NonNullable<Integrity>>("/admin/maintenance", { method: "POST", json: { action: "check" } }); setCheck(r); setRepairLog(null); return r.ok ? "Проблем не найдено" : `Найдено проблем: ${r.issues.filter((i) => i.count).length}`; })}>{busy === "check" ? "Проверка…" : "Проверить"}</button>
-              <button className={btnCls} disabled={busy !== null || !check || check.ok} onClick={() => { if (!window.confirm("Исправить найденные проблемы? Перед этим будет создана резервная копия.")) return; run("repair", async () => { const r = await api<{ fixed: { key: string; title: string; fixed: number }[]; after: NonNullable<Integrity> }>("/admin/maintenance", { method: "POST", json: { action: "repair", backupFirst: true } }); setCheck(r.after); setRepairLog(r.fixed); return `Исправлено: ${r.fixed.reduce((s, f) => s + f.fixed, 0)} записей в ${r.fixed.length} проверках`; }); }}>{busy === "repair" ? "Исправление…" : "Исправить (с копией)"}</button>
+              <button className={btnCls} disabled={busy !== null || !check || check.ok} onClick={async () => { if (!(await askConfirm({ title: "Исправить найденные проблемы?", text: "Перед исправлением будет создана резервная копия.", danger: true, confirmLabel: "Продолжить" }))) return; run("repair", async () => { const r = await api<{ fixed: { key: string; title: string; fixed: number }[]; after: NonNullable<Integrity> }>("/admin/maintenance", { method: "POST", json: { action: "repair", backupFirst: true } }); setCheck(r.after); setRepairLog(r.fixed); return `Исправлено: ${r.fixed.reduce((s, f) => s + f.fixed, 0)} записей в ${r.fixed.length} проверках`; }); }}>{busy === "repair" ? "Исправление…" : "Исправить (с копией)"}</button>
               {check && <Badge tone={check.ok ? "green" : "amber"}>{check.ok ? "целостность в порядке" : `проблем: ${check.issues.filter((i) => i.count).length}`}</Badge>}
             </div>
             {check && (

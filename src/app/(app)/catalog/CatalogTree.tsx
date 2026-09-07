@@ -1,8 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useConfirm } from "@/components/dialog";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
-import { Card, Badge, inputCls, btnCls, btnSecondaryCls, btnDangerCls, Table } from "@/components/ui";
+import { Card, Badge, inputCls, btnCls, btnSecondaryCls, btnDangerCls, Table, FormMessage } from "@/components/ui";
 import { CsvImport } from "@/components/CsvImport";
 import { QuickForm } from "@/components/QuickForm";
 import { fmtQty } from "@/lib/labels";
@@ -41,6 +42,7 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const confirm = useConfirm();
   const [moveTo, setMoveTo] = useState<number>(0);
   const [showImport, setShowImport] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -68,7 +70,7 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
 
   async function bulk(action: "activate" | "deactivate" | "move" | "delete") {
     if (!sel.size) return;
-    if (action === "delete" && !window.confirm(`Удалить ${sel.size} позиций? Позиции с движениями/остатками удалены не будут.`)) return;
+    if (action === "delete" && !(await confirm({ title: "Удалить выбранные позиции?", text: `Позиций: ${sel.size}. Позиции с движениями/остатками удалены не будут.`, danger: true, confirmLabel: "Удалить" }))) return;
     if (action === "move" && !moveTo) { setMsg({ ok: false, text: "Выберите папку назначения" }); return; }
     setBusy(true); setMsg(null);
     try {
@@ -156,7 +158,7 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
           )}
         </Card>
 
-        {msg && <div className={`rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}</div>}
+        {msg && <FormMessage ok={msg.ok} onHide={() => setMsg(null)}>{msg.text}</FormMessage>}
 
         {manage && sel.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm">

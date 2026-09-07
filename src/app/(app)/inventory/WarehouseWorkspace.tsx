@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
-import { Card, Field, Badge, inputCls, btnCls, btnSecondaryCls, btnDangerCls, Table } from "@/components/ui";
+import { Card, Field, Badge, inputCls, btnCls, btnSecondaryCls, btnDangerCls, Table, FormMessage } from "@/components/ui";
 import { UnitStatusBadge } from "@/components/status-badges";
 import { fmtQty, fmtDate, WAREHOUSE_KIND_LABELS } from "@/lib/labels";
 
@@ -103,7 +103,7 @@ export function WarehouseWorkspace({ warehouses, initialWarehouseId, initialStoc
         <Link href="/directories/warehouses" className="shrink-0 rounded-2xl border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 hover:bg-slate-50">+ Новый склад</Link>
       </div>
 
-      {msg && <div className={`rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}{msg.docId && <> · <Link href={`/inventory/documents/${msg.docId}`} className="underline">открыть</Link></>}</div>}
+      {msg && <FormMessage ok={msg.ok} onHide={() => setMsg(null)}>{msg.text}{msg.docId && <> · <Link href={`/inventory/documents/${msg.docId}`} className="underline">открыть</Link></>}</FormMessage>}
 
       {/* Панель действий */}
       <Card>

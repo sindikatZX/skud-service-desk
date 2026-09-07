@@ -2,7 +2,8 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
-import { Field, inputCls, btnCls, btnSecondaryCls } from "@/components/ui";
+import { Field, inputCls, btnCls, btnSecondaryCls, FormMessage, FormActions } from "@/components/ui";
+import { useConfirm } from "@/components/dialog";
 
 export type QF = {
   name: string;
@@ -91,27 +92,61 @@ export function QuickForm({ title, endpoint, method = "POST", fields, submitLabe
         ))}
       </div>
       {children}
-      {msg && <div className={`mt-3 rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{msg.text}</div>}
-      <div className="mt-3 flex gap-2">
+      {msg && <div className="mt-3"><FormMessage ok={msg.ok} onHide={() => setMsg(null)}>{msg.text}</FormMessage></div>}
+      <FormActions className="mt-3">
         <button className={btnCls} disabled={busy}>{busy ? "…" : submitLabel}</button>
         {collapsible && <button type="button" className={btnSecondaryCls} onClick={() => setOpen(false)}>Отмена</button>}
-      </div>
+      </FormActions>
     </form>
   );
 }
 
 /** Кнопка одиночного действия (POST/PATCH/DELETE) с подтверждением. Ошибка показывается рядом, без alert(). */
-export function ActionButton({ endpoint, method = "POST", json, label, confirm: c, className }: { endpoint: string; method?: "POST" | "PATCH" | "DELETE"; json?: unknown; label: string; confirm?: string; className?: string }) {
+export function ActionButton({
+  endpoint,
+  method = "POST",
+  json,
+  label,
+  confirm: confirmText,
+  confirmTitle,
+  danger,
+  className,
+}: {
+  endpoint: string;
+  method?: "POST" | "PATCH" | "DELETE";
+  json?: unknown;
+  label: string;
+  /** Текст подтверждения; показывается в диалоге приложения, а не в системном окне. */
+  confirm?: string;
+  confirmTitle?: string;
+  /** Необратимое действие: красная кнопка подтверждения. */
+  danger?: boolean;
+  className?: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const confirm = useConfirm();
+
+  async function run() {
+    if (confirmText && !(await confirm({ title: confirmTitle, text: confirmText, danger: danger ?? method === "DELETE", confirmLabel: method === "DELETE" ? "Удалить" : "Подтвердить" }))) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api(endpoint, { method, json });
+      router.refresh();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <span className="inline-flex flex-col items-start gap-1">
-      <button type="button" disabled={busy} className={className ?? "min-h-[2rem] text-xs text-indigo-600 hover:underline disabled:opacity-50"} onClick={async () => {
-        if (c && !window.confirm(c)) return;
-        setBusy(true); setErr(null);
-        try { await api(endpoint, { method, json }); router.refresh(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
-      }}>{busy ? "…" : label}</button>
+      <button type="button" disabled={busy} className={className ?? "min-h-[2rem] text-xs text-indigo-600 hover:underline disabled:opacity-50"} onClick={run}>
+        {busy ? "…" : label}
+      </button>
       {err && (
         <span role="alert" className="max-w-xs rounded-lg bg-rose-50 px-2 py-1 text-[11px] leading-snug text-rose-700">
           {err} <button type="button" className="ml-1 underline" onClick={() => setErr(null)}>скрыть</button>
