@@ -515,7 +515,6 @@ export const deleteQuerySchema = z.object({
 /** Конфигурация установки: под кого собрана система и какие модули включены. */
 export const setupSchema = z.object({
   appName: z.string().trim().min(1).max(60).optional(),
-  organization: z.string().trim().max(200).optional(),
   preset: z.string().trim().max(40).optional(),
   enabledModules: z.array(z.string().trim().max(40)).max(50).optional(),
   labels: z.record(z.string(), z.string().max(60)).optional(),

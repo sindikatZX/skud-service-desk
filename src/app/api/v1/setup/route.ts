@@ -17,7 +17,7 @@ export const POST = withAuth(async (req, { user }) => {
   // Неизвестные идентификаторы модулей отбрасываем: список модулей задаёт код, а не запрос
   const enabledModules = b.enabledModules?.filter((id): id is ModuleId => MODULE_BY_ID.has(id as ModuleId));
   const installation = await saveInstallation(
-    { organization: b.organization, preset: b.preset, enabledModules, labels: b.labels, configured: b.configured },
+    { preset: b.preset, enabledModules, labels: b.labels, configured: b.configured },
     user.id,
   );
   return ok(installation);

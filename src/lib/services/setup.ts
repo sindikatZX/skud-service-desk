@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { CORE_MODULES, MODULES, PRESETS, withDependencies, type ModuleId } from "@/lib/modules";
 
 /**
- * Конфигурация установки: под какого заказчика собрана система и какие модули включены.
+ * Конфигурация установки: чем занимается система и какие модули включены.
  *
  * Код у всех заказчиков один, различается конфигурация — так одна и та же система
  * работает и как сервис-деск, и как складской учёт, и как запись клиентов в салон.
@@ -17,8 +17,6 @@ const KEY = "installation";
 export type Installation = {
   /** Настройка пройдена: до этого приложение ведёт администратора в мастер. */
   configured: boolean;
-  /** Для кого установлена система (организация-заказчик). */
-  organization: string;
   /** Род занятий: определяет стартовый набор модулей и подписи разделов. */
   preset: string;
   enabledModules: ModuleId[];
@@ -29,7 +27,6 @@ export type Installation = {
 
 export const DEFAULT_INSTALLATION: Installation = {
   configured: false,
-  organization: "",
   preset: "service",
   // До настройки доступно всё: свежая установка не должна выглядеть сломанной
   enabledModules: MODULES.map((m) => m.id),
@@ -63,13 +60,12 @@ export async function getInstallation(): Promise<Installation> {
 }
 
 export async function saveInstallation(
-  input: { organization?: string; preset?: string; enabledModules?: ModuleId[]; labels?: Record<string, string>; configured?: boolean },
+  input: { preset?: string; enabledModules?: ModuleId[]; labels?: Record<string, string>; configured?: boolean },
   userId?: number,
 ) {
   const current = await getInstallation();
   const next: Omit<Installation, "configuredAt"> = {
     configured: input.configured ?? current.configured,
-    organization: (input.organization ?? current.organization).trim().slice(0, 200),
     preset: input.preset ?? current.preset,
     enabledModules: withDependencies(input.enabledModules ?? current.enabledModules),
     labels: input.labels ?? current.labels,

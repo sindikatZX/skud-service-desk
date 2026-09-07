@@ -13,12 +13,11 @@ export default async function SetupPage() {
     <div>
       <PageHeader
         title={installation.configured ? "Настройка системы" : "Мастер настройки"}
-        subtitle="Для кого установлена система, чем она занимается и какие модули включены"
+        subtitle="Название системы, род занятий и состав модулей"
       />
       <SetupWizard
         appName={branding.appName}
         initial={{
-          organization: installation.organization,
           preset: installation.preset,
           enabledModules: installation.enabledModules,
           configured: installation.configured,

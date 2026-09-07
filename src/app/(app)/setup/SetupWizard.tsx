@@ -6,7 +6,7 @@ import { Card, Field, inputCls, btnCls, btnSecondaryCls, FormMessage, FormAction
 import { MODULES, PRESETS, withDependencies, dependents, MODULE_BY_ID, type ModuleId } from "@/lib/modules";
 
 /**
- * Мастер настройки установки: под кого собирается система, чем она занимается
+ * Мастер настройки установки: как называется система, чем она занимается
  * и какие модули включены. Итог сохраняется в конфигурацию установки, а интерфейс
  * (навигация, доступные разделы, названия) собирается уже по ней.
  */
@@ -14,13 +14,12 @@ export function SetupWizard({
   initial,
   appName,
 }: {
-  initial: { organization: string; preset: string; enabledModules: ModuleId[]; configured: boolean };
+  initial: { preset: string; enabledModules: ModuleId[]; configured: boolean };
   appName: string;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [name, setName] = useState(appName);
-  const [organization, setOrganization] = useState(initial.organization);
   const [preset, setPreset] = useState(initial.preset);
   const [modules, setModules] = useState<ModuleId[]>(initial.enabledModules);
   const [busy, setBusy] = useState(false);
@@ -55,7 +54,7 @@ export function SetupWizard({
       const p = PRESETS.find((x) => x.id === preset);
       await api("/setup", {
         method: "POST",
-        json: { organization, preset, enabledModules: effective, labels: p?.labels ?? {}, appName: name, configured: finish || initial.configured },
+        json: { preset, enabledModules: effective, labels: p?.labels ?? {}, appName: name, configured: finish || initial.configured },
       });
       setMsg({ ok: true, text: finish ? "Система настроена" : "Настройки сохранены" });
       router.refresh();
@@ -67,7 +66,7 @@ export function SetupWizard({
     }
   }
 
-  const steps = ["Заказчик", "Модули", "Проверка"];
+  const steps = ["Система", "Модули", "Проверка"];
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -86,13 +85,10 @@ export function SetupWizard({
       </ol>
 
       {step === 0 && (
-        <Card title="Для кого устанавливается система">
-          <div className="grid gap-3 sm:grid-cols-2">
+        <Card title="Название и род занятий">
+          <div className="max-w-md">
             <Field label="Название системы" hint="Показывается в шапке, на входе и в установленном приложении">
               <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="СКУД•Сервис" />
-            </Field>
-            <Field label="Организация-заказчик" hint="Для кого выполнена установка">
-              <input className={inputCls} value={organization} onChange={(e) => setOrganization(e.target.value)} placeholder="ООО «Северный терминал»" />
             </Field>
           </div>
           <div className="mt-4">
@@ -154,7 +150,6 @@ export function SetupWizard({
         <Card title="Проверьте настройку">
           <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
             <div><dt className="text-xs text-slate-500">Название системы</dt><dd className="font-medium">{name || "—"}</dd></div>
-            <div><dt className="text-xs text-slate-500">Заказчик</dt><dd className="font-medium">{organization || "—"}</dd></div>
             <div><dt className="text-xs text-slate-500">Род занятий</dt><dd className="font-medium">{PRESETS.find((p) => p.id === preset)?.name}</dd></div>
             <div><dt className="text-xs text-slate-500">Модулей включено</dt><dd className="font-medium">{effective.length} из {MODULES.length}</dd></div>
           </dl>

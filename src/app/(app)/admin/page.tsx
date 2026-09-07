@@ -35,7 +35,6 @@ export default async function AdminPage() {
             <div>
               <div className="text-sm font-semibold text-slate-900">Состав системы</div>
               <p className="mt-0.5 text-sm text-slate-500">
-                {installation.organization ? <>Установлено для: <span className="font-medium text-slate-700">{installation.organization}</span> · </> : null}
                 {presetById(installation.preset).name} · модулей включено: {installation.enabledModules.length} из {MODULES.length}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
