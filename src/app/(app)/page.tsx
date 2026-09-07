@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getInstallation } from "@/lib/services/setup";
+import { capitalize, termsFor } from "@/lib/terms";
 import { requireUser } from "@/lib/page-auth";
 import { dashboardSummary, teamsStockSummary } from "@/lib/services/reports";
 import { listTickets } from "@/lib/services/tickets";
@@ -15,6 +16,7 @@ export default async function Dashboard() {
   const user = await requireUser([]);
   // Свежая установка: администратора ведём в мастер настройки, остальных — не трогаем
   const installation = await getInstallation();
+  const terms = termsFor(installation.preset);
   if (!installation.configured && canAnyWithRole(user, ["admin.maintenance", "users.manage"])) redirect("/setup");
   if (user.scope !== "all") redirect("/tickets");
   const [summary, active, overdue, teamStock] = await Promise.all([
@@ -27,7 +29,7 @@ export default async function Dashboard() {
   const openCount = (s.new ?? 0) + (s.assigned ?? 0) + (s.scheduled ?? 0) + (s.in_progress ?? 0) + (s.on_hold ?? 0);
   return (
     <div>
-      <PageHeader title="Главная" subtitle={`Добро пожаловать, ${user.fullName}`} action={can(user, "tickets.create") ? <Link href="/tickets/new" className="hidden rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white lg:inline-flex">+ Новая заявка</Link> : null} />
+      <PageHeader title="Главная" subtitle={`Добро пожаловать, ${user.fullName}`} action={can(user, "tickets.create") ? <Link href="/tickets/new" className="hidden rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white lg:inline-flex">+ {capitalize(terms.ticket.nom)}</Link> : null} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
         <Stat label="Новые" value={s.new ?? 0} href="/tickets?status=new" />
         <Stat label="В работе" value={(s.in_progress ?? 0) + (s.scheduled ?? 0) + (s.assigned ?? 0)} href="/tickets?status=assigned,scheduled,in_progress" />
@@ -37,7 +39,7 @@ export default async function Dashboard() {
         <Stat label="Ср. время выполнения" value={summary.avgCompletionHours != null ? `${summary.avgCompletionHours} ч` : "—"} hint="от создания до выполнения" />
       </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        <Card title="Активные заявки" className="xl:col-span-2" action={<Link href="/tickets?status=new,assigned,scheduled,in_progress,on_hold" className="text-sm text-indigo-600">Все →</Link>}>
+        <Card title={`Активные ${terms.ticket.plural.toLowerCase()}`} className="xl:col-span-2" action={<Link href="/tickets?status=new,assigned,scheduled,in_progress,on_hold" className="text-sm text-indigo-600">Все →</Link>}>
           <ul className="space-y-2 md:hidden">
             {active.length === 0 && <li className="py-4 text-center text-sm text-slate-400">Активных заявок нет</li>}
             {active.map((t) => (
@@ -51,7 +53,7 @@ export default async function Dashboard() {
             ))}
           </ul>
           <div className="hidden md:block">
-          <Table head={["№", "Заявка", "Клиент / объект", "Бригада", "Срок", "Статус"]} empty={!active.length}>
+          <Table head={["№", capitalize(terms.ticket.nom), `${capitalize(terms.client.nom)} / ${terms.site.nom}`, capitalize(terms.team.nom), "Срок", "Статус"]} empty={!active.length}>
             {active.map((t) => (
               <tr key={t.id} className="hover:bg-slate-50">
                 <Td><Link href={`/tickets/${t.id}`} className="font-mono text-xs text-indigo-600">{t.number}</Link></Td>
@@ -89,7 +91,7 @@ export default async function Dashboard() {
           )}
         </div>
       </div>
-      {can(user, "tickets.create") && <Fab href="/tickets/new" label="Заявка" />}
+      {can(user, "tickets.create") && <Fab href="/tickets/new" label={capitalize(terms.ticket.nom)} />}
     </div>
   );
 }

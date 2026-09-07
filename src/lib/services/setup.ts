@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { appSettings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { CORE_MODULES, MODULES, PRESETS, withDependencies, type ModuleId } from "@/lib/modules";
+import { termsFor } from "@/lib/terms";
 
 /**
  * Конфигурация установки: чем занимается система и какие модули включены.
@@ -85,4 +86,10 @@ export function presetById(id: string) {
 
 export function isModuleEnabled(inst: Installation, id: ModuleId) {
   return CORE_MODULES.includes(id) || inst.enabledModules.includes(id);
+}
+
+/** Словарь терминов текущей установки: тексты страниц берут слова отсюда. */
+export async function getTerms() {
+  const inst = await getInstallation();
+  return termsFor(inst.preset);
 }

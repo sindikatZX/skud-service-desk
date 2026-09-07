@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { clients, sites } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { requireUser, requireModule } from "@/lib/page-auth";
+import { getTerms } from "@/lib/services/setup";
 import { can } from "@/lib/rbac";
 import { listTeamsWithDetails } from "@/lib/services/teams";
 import { getFormDictionaries } from "@/lib/services/directories";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function NewTicketPage() {
   const user = await requireUser(["tickets.create"]);
   await requireModule("tickets");
+  const terms = await getTerms();
   const clientRows = await db
     .select({ id: clients.id, name: clients.name })
     .from(clients)
@@ -27,7 +29,7 @@ export default async function NewTicketPage() {
   const { types, priorities } = await getFormDictionaries();
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader title="Новая заявка" />
+      <PageHeader title={`Новая ${terms.ticket.nom}`} />
       <TicketForm
         clients={clientRows}
         sites={siteRows.filter((s) => clientRows.some((c) => c.id === s.clientId))}

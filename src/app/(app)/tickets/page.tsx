@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requireUser, requireModule } from "@/lib/page-auth";
+import { getTerms } from "@/lib/services/setup";
+import { capitalize } from "@/lib/terms";
 import { listTickets } from "@/lib/services/tickets";
 import { listTeamsWithDetails } from "@/lib/services/teams";
 import { Card, PageHeader, Table, Td, inputCls, Fab, Chips, Badge, btnFilterCls, btnFilterResetCls } from "@/components/ui";
@@ -21,6 +23,7 @@ function buildHref(base: Record<string, string | undefined>, patch: Record<strin
 export default async function TicketsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser(["tickets.read.all", "tickets.read.own"]);
   await requireModule("tickets");
+  const terms = await getTerms();
   const sp = await searchParams;
   const filters = { q: sp.q, teamId: sp.teamId, status: sp.status, overdue: sp.overdue };
   const [rows, teams] = await Promise.all([
@@ -41,9 +44,9 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
   return (
     <div>
       <PageHeader
-        title={isTech ? "Заявки моей бригады" : "Заявки"}
-        subtitle={`${rows.length} ${plural(rows.length, "заявка", "заявки", "заявок")}`}
-        action={canCreate ? <Link href="/tickets/new" className="hidden rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white lg:inline-flex">+ Новая заявка</Link> : null}
+        title={isTech ? `${terms.ticket.plural} моей ${terms.team.gen}` : terms.ticket.plural}
+        subtitle={`${rows.length} ${plural(rows.length, terms.ticket.nom, terms.ticket.gen, terms.ticket.pluralGen)}`}
+        action={canCreate ? <Link href="/tickets/new" className="hidden rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white lg:inline-flex">+ {capitalize(terms.ticket.nom)}</Link> : null}
       />
       {sp.denied && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">Раздел недоступен для вашей роли.</div>}
 
@@ -100,7 +103,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
 
       {/* Таблица (планшет/desktop) */}
       <Card className="hidden md:block">
-        <Table head={["№", "Заявка", "Клиент / объект", "Бригада", "Выезд", "Срок", "Статус"]} empty={!rows.length} emptyText="Заявок по этому фильтру нет">
+        <Table head={["№", capitalize(terms.ticket.nom), `${capitalize(terms.client.nom)} / ${terms.site.nom}`, capitalize(terms.team.nom), "Выезд", "Срок", "Статус"]} empty={!rows.length} emptyText={`${capitalize(terms.ticket.pluralGen)} по этому фильтру нет`}>
           {rows.map((t) => {
             const overdue = isOverdue(t.dueAt, t.status);
             return (
@@ -118,7 +121,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
         </Table>
       </Card>
 
-      {canCreate && <Fab href="/tickets/new" label="Заявка" />}
+      {canCreate && <Fab href="/tickets/new" label={capitalize(terms.ticket.nom)} />}
     </div>
   );
 }

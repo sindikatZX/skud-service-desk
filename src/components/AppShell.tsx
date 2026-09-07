@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { isModuleEnabled, DEFAULT_INSTALLATION, type Installation } from "@/lib/services/setup";
 import type { ModuleId } from "@/lib/modules";
+import { navLabelsFrom, termsFor } from "@/lib/terms";
 import type { ReactNode } from "react";
 import type { SessionUser } from "@/lib/auth";
 import { can, canAnyWithRole } from "@/lib/rbac";
@@ -38,10 +39,15 @@ export function navFor(user: SessionUser, installation: Installation = DEFAULT_I
   if (canAnyWithRole(user, ["admin.backup", "admin.maintenance"])) items.push({ href: "/admin", label: "Администрирование", icon: "shield", short: "Админ" });
   items.push({ href: "/profile", label: "Моя учётная запись", icon: "user", short: "Профиль" });
 
-  // Отраслевые названия разделов
+  // Названия разделов: словарь терминов рода занятий, поверх — явные переопределения
+  const fromTerms = navLabelsFrom(termsFor(installation.preset));
   return items.map((it) => {
-    const label = installation.labels?.[it.href];
-    return label ? { ...it, label, short: label.length > 12 ? it.short : label } : it;
+    const label = installation.labels?.[it.href] ?? fromTerms[it.href];
+    if (!label || label === it.label) return it;
+    // В нижней панели телефона мало места: длинное название сокращаем до первого слова,
+    // иначе там осталось бы старое слово из другой отрасли
+    const short = label.length > 12 ? label.split(" ")[0] : label;
+    return { ...it, label, short };
   });
 }
 

@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
+import { useTerms } from "@/components/terms-context";
 import { Card, Field, inputCls, btnCls } from "@/components/ui";
 
 type Props = {
@@ -15,6 +16,7 @@ type Props = {
 
 export function TicketForm({ clients, sites, teams, types, priorities, canAssign }: Props) {
   const router = useRouter();
+  const terms = useTerms();
   const [clientId, setClientId] = useState(clients[0]?.id ?? 0);
   const clientSites = useMemo(() => sites.filter((s) => s.clientId === clientId), [sites, clientId]);
   const [siteId, setSiteId] = useState(clientSites[0]?.id ?? 0);
@@ -45,7 +47,7 @@ export function TicketForm({ clients, sites, teams, types, priorities, canAssign
           <Field label="Клиент"><select className={inputCls} value={clientId} onChange={(e) => { const id = Number(e.target.value); setClientId(id); setSiteId(sites.find((s) => s.clientId === id)?.id ?? 0); }}>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
           <Field label="Объект"><select className={inputCls} value={siteId || clientSites[0]?.id || ""} onChange={(e) => setSiteId(Number(e.target.value))} required>{clientSites.length === 0 && <option value="">— у клиента нет объектов —</option>}{clientSites.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.address}</option>)}</select></Field>
         </div>
-        <Field label="Тема заявки"><input name="title" className={inputCls} required placeholder="Напр.: Не работает камера на входе" /></Field>
+        <Field label={`Тема ${terms.ticket.gen}`}><input name="title" className={inputCls} required placeholder="Напр.: Не работает камера на входе" /></Field>
         <Field label="Описание"><textarea name="description" className={inputCls} rows={3} /></Field>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Тип работ" hint="Список ведётся в справочниках">
@@ -70,7 +72,7 @@ export function TicketForm({ clients, sites, teams, types, priorities, canAssign
           </div>
         )}
         {err && <div className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{err}</div>}
-        <button className={`${btnCls} w-full sm:w-auto`} disabled={busy || !clientSites.length}>{busy ? "Сохранение…" : "Создать заявку"}</button>
+        <button className={`${btnCls} w-full sm:w-auto`} disabled={busy || !clientSites.length}>{busy ? "Сохранение…" : `Создать ${terms.ticket.acc}`}</button>
       </form>
     </Card>
   );

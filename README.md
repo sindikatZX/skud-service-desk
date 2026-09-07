@@ -33,6 +33,7 @@ docker compose up -d --build
 | 9 | [Справочники, чат и удаление записей](docs/09-directories-chat-deletion.md) |
 | 11 | [Набор интерфейсных примитивов](docs/11-ui-kit.md) |
 | 12 | [Модули и настройка под заказчика](docs/12-modules.md) |
+| 13 | [Словарь терминов](docs/13-terms.md) |
 | 10 | [PWA и мобильная версия](docs/10-pwa-mobile.md) |
 
 История доработок — в [CHANGELOG.md](CHANGELOG.md).
