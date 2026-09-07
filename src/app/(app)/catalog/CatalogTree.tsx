@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
-import { Card, Badge, inputCls, btnCls, btnSecondaryCls, btnDangerCls } from "@/components/ui";
+import { Card, Badge, inputCls, btnCls, btnSecondaryCls, btnDangerCls, Table } from "@/components/ui";
 import { CsvImport } from "@/components/CsvImport";
 import { QuickForm } from "@/components/QuickForm";
 import { fmtQty } from "@/lib/labels";
@@ -173,16 +173,18 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
         )}
 
         <Card>
-          <div className="-mx-4 overflow-x-auto sm:mx-0">
-            <table className="min-w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr className="border-b border-slate-200">
+          <Table
+            colSpan={(manage ? 7 : 6) + (showPrices ? 1 : 0)}
+            empty={!list.length}
+            emptyText={onlyStock ? "В этой папке нет позиций в наличии. Снимите флажок «Только в наличии»." : "Нет позиций"}
+            headRow={
+              <>
                   {manage && <th className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set([...sel, ...list.map((i) => i.id)]) : new Set([...sel].filter((id) => !list.some((i) => i.id === id))))} /></th>}
                   <th className="px-3 py-2 font-medium">Товар</th><th className="px-3 py-2 font-medium">Папка</th><th className="px-3 py-2 font-medium">Учёт</th>{showPrices && <th className="px-3 py-2 font-medium">Цена</th>}<th className="px-3 py-2 font-medium">Склады</th><th className="px-3 py-2 font-medium">У бригад</th><th className="px-3 py-2 font-medium">Установлено</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {list.map((i) => (
+              </>
+            }
+          >
+            {list.map((i) => (
                   <tr key={i.id} className={`${sel.has(i.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"} ${!i.isActive ? "opacity-50" : ""}`}>
                     {manage && <td className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={sel.has(i.id)} onChange={() => toggle(i.id)} /></td>}
                     <td className="px-3 py-2"><div className="font-medium">{i.name}</div><div className="text-xs text-slate-500"><span className="font-mono">{i.code}</span> · {i.sku}{i.externalCode ? ` · 1С: ${i.externalCode}` : ""}{i.manufacturer ? ` · ${i.manufacturer}` : ""}</div></td>
@@ -209,10 +211,7 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
                     <td className="px-3 py-2">{i.isSerialized ? i.unitsInstalled : "—"}</td>
                   </tr>
                 ))}
-                {!list.length && <tr><td colSpan={(manage ? 7 : 6) + (showPrices ? 1 : 0)} className="px-3 py-8 text-center text-slate-400">{onlyStock ? "В этой папке нет позиций в наличии. Снимите флажок «Только в наличии»." : "Нет позиций"}</td></tr>}
-              </tbody>
-            </table>
-          </div>
+          </Table>
           <div className="mt-2 text-xs text-slate-500">Показано {list.length} из {items.length}</div>
         </Card>
       </div>

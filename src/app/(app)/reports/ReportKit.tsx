@@ -2,8 +2,9 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
-import { btnCls, btnSecondaryCls, inputCls, btnFilterCls, btnFilterResetCls } from "@/components/ui";
+import { btnCls, btnSecondaryCls, inputCls, btnFilterCls, btnFilterResetCls, thCls, type Align } from "@/components/ui";
 import { Icon } from "@/components/icons";
+import { SortLink } from "@/components/SortLink";
 
 /**
  * Общие элементы конфигурируемых отчётов: панель действий (печать / CSV / сброс),
@@ -28,21 +29,15 @@ export function ReportToolbar({ csvHref, resetHref, canExport, rows }: { csvHref
 }
 
 /** Заголовок колонки с сортировкой: клик переключает поле и направление. */
-export function SortTh({ field, children, current, dir, className = "" }: { field: string; children: ReactNode; current?: string; dir?: string; className?: string }) {
-  const sp = useSearchParams();
-  const active = current === field;
-  const nextDir = active && dir === "asc" ? "desc" : "asc";
-  const p = new URLSearchParams(sp.toString());
-  p.set("sort", field); p.set("dir", nextDir);
+/** Сортируемый заголовок колонки отчёта — на общих табличных токенах. */
+export function SortTh({ field, children, current, dir, className = "", align }: { field: string; children: ReactNode; current?: string; dir?: string; className?: string; align?: Align }) {
   return (
-    <th className={`px-3 py-2 font-medium ${className}`}>
-      <Link href={`?${p.toString()}`} className={`inline-flex items-center gap-1 whitespace-nowrap hover:text-indigo-700 ${active ? "text-indigo-700" : ""}`}>
-        {children}
-        <span className="text-[10px]">{active ? (dir === "asc" ? "▲" : "▼") : <span className="no-print text-slate-300">↕</span>}</span>
-      </Link>
+    <th className={thCls(align ?? (className.includes("text-right") ? "right" : "left"), className)} scope="col">
+      <SortLink field={field} current={current} dir={dir}>{children}</SortLink>
     </th>
   );
 }
+
 
 /** Шапка печатной формы: заголовок, период, параметры отбора, дата формирования, исполнитель. */
 export function PrintHeader({ title, period, filters, user, appName = "СКУД•Сервис" }: { title: string; period: string; filters: { label: string; value: string }[]; user: string; appName?: string }) {

@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/page-auth";
 import { can, canWithRole } from "@/lib/rbac";
 import { dashboardSummary, employeeWorkload, inventoryConsumption, clientsReport, teamsStockSummary } from "@/lib/services/reports";
 import { listTeamsWithDetails } from "@/lib/services/teams";
-import { Card, PageHeader, Table, Td, inputCls, Field, PeriodFields, btnFilterCls, btnFilterResetCls } from "@/components/ui";
+import { Card, PageHeader, Table, Td, inputCls, Field, PeriodFields, btnFilterCls, btnFilterResetCls, SummaryList } from "@/components/ui";
 import { STATUS_LABELS, fmtQty } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -140,25 +140,21 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   );
 }
 
-/** Компактная таблица показателей: подпись слева, значение справа (табличные цифры). */
+/** Показатели раздела: подпись слева, значение справа — на общем примитиве сводки. */
 function KpiTable({ title, rows }: { title: string; rows: { key: string; label: string; value: number | string; href?: string; hint?: string }[] }) {
   return (
-    <div className="min-w-0">
-      <div className="mb-1 border-b border-slate-200 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
-      <table className="w-full">
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.key} className="border-b border-slate-100 last:border-0">
-              <td className="py-0.5 pr-2 text-slate-700">
-                {r.href ? <Link href={r.href} className="hover:text-indigo-700 hover:underline">{r.label}</Link> : r.label}
-                {r.hint && <span className="ml-1 text-[10px] text-slate-400">{r.hint}</span>}
-              </td>
-              <td className="py-0.5 text-right font-semibold tabular-nums text-slate-900">{r.value}</td>
-            </tr>
-          ))}
-          {!rows.length && <tr><td className="py-1 text-slate-400">Нет данных</td></tr>}
-        </tbody>
-      </table>
-    </div>
+    <SummaryList
+      title={title}
+      rows={rows.map((r) => ({
+        key: r.key,
+        label: (
+          <>
+            {r.href ? <Link href={r.href} className="hover:text-indigo-700 hover:underline">{r.label}</Link> : r.label}
+            {r.hint && <span className="ml-1 text-[10px] text-slate-400">{r.hint}</span>}
+          </>
+        ),
+        value: r.value,
+      }))}
+    />
   );
 }

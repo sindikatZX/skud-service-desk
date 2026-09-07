@@ -3,7 +3,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
-import { Card, Field, Badge, inputCls, btnCls, btnSecondaryCls, btnDangerCls, UnitStatusBadge } from "@/components/ui";
+import { Card, Field, Badge, inputCls, btnCls, btnSecondaryCls, btnDangerCls, Table } from "@/components/ui";
+import { UnitStatusBadge } from "@/components/status-badges";
 import { fmtQty, fmtDate, WAREHOUSE_KIND_LABELS } from "@/lib/labels";
 
 export type WhSummary = { id: number; name: string; kind: string; teamId: number | null; materialItems: number; unitsFree: number; unitsReserved: number };
@@ -150,16 +151,19 @@ export function WarehouseWorkspace({ warehouses, initialWarehouseId, initialStoc
 
       <div className={`grid gap-4 lg:grid-cols-2 ${loading ? "opacity-50" : ""}`}>
         <Card title={<>Серийное оборудование <span className="text-sm font-normal text-slate-500">({freeUnits.length}{reservedUnits.length ? ` + ${reservedUnits.length} в резерве` : ""})</span></>}>
-          <div className="-mx-4 max-h-[32rem] overflow-auto sm:mx-0">
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 bg-white text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr className="border-b border-slate-200">
+          <Table
+            maxHeight="32rem"
+            colSpan={4}
+            empty={!freeUnits.length && !reservedUnits.length}
+            emptyText="Нет серийного оборудования"
+            headRow={
+              <>
                   <th className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={allUnitsSel} onChange={(e) => setSelUnits(e.target.checked ? new Set([...selUnits, ...freeUnits.map((u) => u.id)]) : new Set([...selUnits].filter((id) => !freeUnits.some((u) => u.id === id))))} /></th>
                   <th className="px-3 py-2 font-medium">Позиция</th><th className="px-3 py-2 font-medium">S/N</th><th className="px-3 py-2 font-medium">Партия</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {freeUnits.map((u) => (
+              </>
+            }
+          >
+            {freeUnits.map((u) => (
                   <tr key={u.id} className={selUnits.has(u.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"} onClick={() => toggleUnit(u.id)}>
                     <td className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={selUnits.has(u.id)} onChange={() => toggleUnit(u.id)} onClick={(e) => e.stopPropagation()} /></td>
                     <td className="px-3 py-2"><div className="font-medium">{u.name}</div><div className="text-xs text-slate-500">{u.sku} · {u.category}</div></td>
@@ -175,23 +179,23 @@ export function WarehouseWorkspace({ warehouses, initialWarehouseId, initialStoc
                     <td className="px-3 py-2 text-xs"><UnitStatusBadge status={u.status} /> {u.ticketId && <Link href={`/tickets/${u.ticketId}`} className="text-indigo-600">#{u.ticketId}</Link>}</td>
                   </tr>
                 ))}
-                {!freeUnits.length && !reservedUnits.length && <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400">Нет серийного оборудования</td></tr>}
-              </tbody>
-            </table>
-          </div>
+          </Table>
         </Card>
 
         <Card title={<>Материалы <span className="text-sm font-normal text-slate-500">({balances.length})</span></>}>
-          <div className="-mx-4 max-h-[32rem] overflow-auto sm:mx-0">
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 bg-white text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr className="border-b border-slate-200">
+          <Table
+            maxHeight="32rem"
+            colSpan={4}
+            empty={!balances.length}
+            emptyText="Нет материалов"
+            headRow={
+              <>
                   <th className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={allItemsSel} onChange={(e) => setSelItems(e.target.checked ? new Map([...selItems, ...balances.map((b) => [b.catalogItemId, b.quantity] as [number, string])]) : new Map())} /></th>
                   <th className="px-3 py-2 font-medium">Позиция</th><th className="px-3 py-2 font-medium">Остаток</th><th className="px-3 py-2 font-medium">К операции</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {balances.map((b) => (
+              </>
+            }
+          >
+            {balances.map((b) => (
                   <tr key={b.catalogItemId} className={selItems.has(b.catalogItemId) ? "bg-indigo-50/60" : "hover:bg-slate-50"}>
                     <td className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={selItems.has(b.catalogItemId)} onChange={() => toggleItem(b.catalogItemId, b.quantity)} /></td>
                     <td className="px-3 py-2"><div className="font-medium">{b.name}</div><div className="text-xs text-slate-500">{b.sku} · {b.category}</div></td>
@@ -199,10 +203,7 @@ export function WarehouseWorkspace({ warehouses, initialWarehouseId, initialStoc
                     <td className="px-3 py-2">{selItems.has(b.catalogItemId) && <input type="number" step="0.001" min="0.001" max={b.quantity} value={selItems.get(b.catalogItemId)} onChange={(e) => setSelItems((m) => new Map(m).set(b.catalogItemId, e.target.value))} className={`${inputCls} min-h-[2rem] w-24 py-1`} />}</td>
                   </tr>
                 ))}
-                {!balances.length && <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400">Нет материалов</td></tr>}
-              </tbody>
-            </table>
-          </div>
+          </Table>
           {stock.reservations.length > 0 && (
             <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs">
               <div className="mb-1 font-semibold text-amber-800">Резервы под заявки</div>

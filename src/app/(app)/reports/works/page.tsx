@@ -4,7 +4,7 @@ import { ticketTypes, sites, clients, teams, users, roles, workCatalog } from "@
 import { asc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/page-auth";
 import { canWithRole } from "@/lib/rbac";
-import { Card, PageHeader, Field, inputCls } from "@/components/ui";
+import { Card, PageHeader, Field, inputCls, Table, thCls, tdCls, SummaryList } from "@/components/ui";
 import { fmtQty, fmtDate } from "@/lib/labels";
 import { worksReport, parsePeriod, periodLabel } from "@/lib/services/report-builder";
 import { worksReportQuerySchema } from "@/lib/validators";
@@ -92,25 +92,26 @@ export default async function WorksReportPage({ searchParams }: { searchParams: 
 
         <div className="mb-4 grid gap-3 md:grid-cols-2">
           <div className="rounded-xl border border-slate-200 p-3">
-            <div className="mb-1 text-xs font-semibold uppercase text-slate-500">{where ? "Сводка по объектам" : "Сводка по видам выполненных работ"}</div>
-            <table className="w-full text-xs"><tbody>
-              {(where ? rep.bySite : rep.byWork).slice(0, 15).map((g) => <tr key={g.key} className="border-t border-slate-100"><td className="py-1 pr-2">{g.label}</td><td className="py-1 text-right tabular-nums">{g.count} раб. · {fmtQty(g.quantity)} ед. · {(g.minutes / 60).toFixed(1)} ч</td></tr>)}
-              {!(where ? rep.bySite : rep.byWork).length && <tr><td className="py-2 text-slate-400">Нет данных</td></tr>}
-            </tbody></table>
+            <SummaryList
+              title={where ? "Сводка по объектам" : "Сводка по видам выполненных работ"}
+              rows={(where ? rep.bySite : rep.byWork).slice(0, 15).map((g) => ({ key: g.key, label: g.label, value: `${g.count} раб. · ${fmtQty(g.quantity)} ед. · ${(g.minutes / 60).toFixed(1)} ч` }))}
+            />
           </div>
           <div className="rounded-xl border border-slate-200 p-3">
-            <div className="mb-1 text-xs font-semibold uppercase text-slate-500">{where ? "Сводка по бригадам" : "Сводка по видам заявок"}</div>
-            <table className="w-full text-xs"><tbody>
-              {(where ? rep.byTeam : rep.byType).map((g) => <tr key={g.key} className="border-t border-slate-100"><td className="py-1 pr-2">{g.label}</td><td className="py-1 text-right tabular-nums">{g.count} раб. · {g.tickets} заяв. · {(g.minutes / 60).toFixed(1)} ч</td></tr>)}
-              {!(where ? rep.byTeam : rep.byType).length && <tr><td className="py-2 text-slate-400">Нет данных</td></tr>}
-            </tbody></table>
+            <SummaryList
+              title={where ? "Сводка по бригадам" : "Сводка по видам заявок"}
+              rows={(where ? rep.byTeam : rep.byType).map((g) => ({ key: g.key, label: g.label, value: `${g.count} раб. · ${g.tickets} заяв. · ${(g.minutes / 60).toFixed(1)} ч` }))}
+            />
           </div>
         </div>
 
-        <div className="-mx-4 overflow-x-auto sm:mx-0">
-          <table className="min-w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr className="border-b border-slate-200">
+        <Table
+          dense
+          colSpan={11}
+          empty={!rep.rows.length}
+          emptyText="Работ по заданным условиям нет"
+          headRow={
+            <>
                 <SortTh field="date" current={sort} dir={dir}>Дата</SortTh>
                 {where && <><SortTh field="client" current={sort} dir={dir}>Клиент</SortTh><SortTh field="site" current={sort} dir={dir}>Объект</SortTh><SortTh field="team" current={sort} dir={dir}>Бригада</SortTh></>}
                 <SortTh field="type" current={sort} dir={dir}>Вид работ</SortTh>
@@ -120,26 +121,23 @@ export default async function WorksReportPage({ searchParams }: { searchParams: 
                 <SortTh field="ticket" current={sort} dir={dir}>Заявка</SortTh>
                 {!where && <><SortTh field="performer" current={sort} dir={dir}>Исполнитель</SortTh><SortTh field="team" current={sort} dir={dir}>Бригада</SortTh><SortTh field="site" current={sort} dir={dir}>Объект</SortTh></>}
                 {where && <SortTh field="performer" current={sort} dir={dir}>Исполнитель</SortTh>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
+            </>
+          }
+        >
               {rep.rows.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
                   <td className="whitespace-nowrap px-3 py-1.5 text-xs">{fmtDate(r.date)}</td>
-                  {where && <><td className="px-3 py-1.5 text-xs">{r.client}</td><td className="px-3 py-1.5 text-xs"><div>{r.site}</div><div className="text-[11px] text-slate-500">{r.address}</div></td><td className="px-3 py-1.5 text-xs">{r.team ?? "—"}</td></>}
-                  <td className="px-3 py-1.5 text-xs">{r.type}</td>
-                  <td className="px-3 py-1.5 font-medium">{r.work}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(r.quantity)} {r.unit}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{r.minutes ?? "—"}</td>
-                  <td className="px-3 py-1.5 text-xs"><Link href={`/tickets/${r.ticketId}`} className="font-mono text-indigo-600">{r.ticketNumber}</Link><div className="max-w-[16rem] truncate text-[11px] text-slate-500">{r.ticketTitle}</div></td>
-                  {!where && <><td className="px-3 py-1.5 text-xs">{r.performer ?? "—"}</td><td className="px-3 py-1.5 text-xs">{r.team ?? "—"}</td><td className="px-3 py-1.5 text-xs">{r.client} — {r.site}</td></>}
-                  {where && <td className="px-3 py-1.5 text-xs">{r.performer ?? "—"}</td>}
+                  {where && <><td className={tdCls({ dense: true, extra: "text-xs" })}>{r.client}</td><td className={tdCls({ dense: true, extra: "text-xs" })}><div>{r.site}</div><div className="text-[11px] text-slate-500">{r.address}</div></td><td className={tdCls({ dense: true, extra: "text-xs" })}>{r.team ?? "—"}</td></>}
+                  <td className={tdCls({ dense: true, extra: "text-xs" })}>{r.type}</td>
+                  <td className={tdCls({ dense: true, extra: "font-medium" })}>{r.work}</td>
+                  <td className={tdCls({ numeric: true, dense: true })}>{fmtQty(r.quantity)} {r.unit}</td>
+                  <td className={tdCls({ numeric: true, dense: true })}>{r.minutes ?? "—"}</td>
+                  <td className={tdCls({ dense: true, extra: "text-xs" })}><Link href={`/tickets/${r.ticketId}`} className="font-mono text-indigo-600">{r.ticketNumber}</Link><div className="max-w-[16rem] truncate text-[11px] text-slate-500">{r.ticketTitle}</div></td>
+                  {!where && <><td className={tdCls({ dense: true, extra: "text-xs" })}>{r.performer ?? "—"}</td><td className={tdCls({ dense: true, extra: "text-xs" })}>{r.team ?? "—"}</td><td className={tdCls({ dense: true, extra: "text-xs" })}>{r.client} — {r.site}</td></>}
+                  {where && <td className={tdCls({ dense: true, extra: "text-xs" })}>{r.performer ?? "—"}</td>}
                 </tr>
               ))}
-              {!rep.rows.length && <tr><td colSpan={11} className="px-3 py-8 text-center text-slate-400">Работ по заданным условиям нет</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        </Table>
         <PrintFooter />
       </Card>
     </div>

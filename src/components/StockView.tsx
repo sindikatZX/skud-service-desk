@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Card, Table, Td, UnitStatusBadge } from "@/components/ui";
+import { Card, Table, Td } from "@/components/ui";
+import { UnitStatusBadge } from "@/components/status-badges";
 import { fmtQty } from "@/lib/labels";
 import type { getStock } from "@/lib/services/inventory";
 import type { ReactNode } from "react";

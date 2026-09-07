@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { STATUS_COLORS, STATUS_LABELS, UNIT_STATUS_COLORS, UNIT_STATUS_LABELS } from "@/lib/labels";
+import { SortLink } from "@/components/SortLink";
 
 export function Card({ title, children, className = "", action }: { title?: ReactNode; children: ReactNode; className?: string; action?: ReactNode }) {
   return (
@@ -28,12 +28,19 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   );
 }
 
-export function StatusBadge({ status }: { status: string }) {
-  return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${STATUS_COLORS[status] ?? "bg-slate-100"}`}>{STATUS_LABELS[status] ?? status}</span>;
+/**
+ * Бейдж, управляемый словарями подписей и цветов. Сам примитив ничего не знает о
+ * предметной области: конкретные статусы (заявок, складских единиц, записей будущих
+ * модулей) описываются в доменном слое и передаются сюда.
+ */
+export function MappedBadge({ value, labels, colors, fallback = "bg-slate-100 text-slate-700" }: { value: string; labels?: Record<string, string>; colors?: Record<string, string>; fallback?: string }) {
+  return (
+    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${colors?.[value] ?? fallback}`}>
+      {labels?.[value] ?? value}
+    </span>
+  );
 }
-export function UnitStatusBadge({ status }: { status: string }) {
-  return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${UNIT_STATUS_COLORS[status] ?? "bg-slate-100"}`}>{UNIT_STATUS_LABELS[status] ?? status}</span>;
-}
+
 export function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: "slate" | "green" | "amber" | "rose" | "indigo" }) {
   const map = { slate: "bg-slate-100 text-slate-700", green: "bg-emerald-100 text-emerald-800", amber: "bg-amber-100 text-amber-800", rose: "bg-rose-100 text-rose-800", indigo: "bg-indigo-100 text-indigo-800" };
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${map[tone]}`}>{children}</span>;
@@ -50,28 +57,192 @@ export function Stat({ label, value, hint, href }: { label: string; value: React
   return href ? <Link href={href} className="block hover:opacity-90">{inner}</Link> : inner;
 }
 
-export function Table({ head, children, empty, emptyText = "Нет данных" }: { head: ReactNode[]; children: ReactNode; empty?: boolean; emptyText?: string }) {
+/* ─────────────── ТАБЛИЦЫ ───────────────
+ * Один визуальный язык для всех таблиц приложения. Раскладка описывается колонками,
+ * а не разметкой: модулю (складскому, сервисному, любому будущему) достаточно описать
+ * колонки — отступы, выравнивание, поведение на узком экране и пустое состояние
+ * приходят из общих токенов и одинаковы везде.
+ */
+
+export type Align = "left" | "right" | "center";
+
+const alignCls: Record<Align, string> = { left: "text-left", right: "text-right", center: "text-center" };
+
+/** Классы ячейки заголовка. Выравнивание заголовка всегда совпадает с ячейками колонки. */
+export function thCls(align: Align = "left", extra = "") {
+  return `px-3 py-2 font-medium first:pl-4 sm:first:pl-3 ${alignCls[align]} ${extra}`;
+}
+
+/**
+ * Классы ячейки данных. `numeric` включает моноширинные цифры и выравнивание вправо:
+ * числа в колонке должны сравниваться взглядом по разрядам.
+ */
+export function tdCls({ align, numeric, dense, extra = "" }: { align?: Align; numeric?: boolean; dense?: boolean; extra?: string } = {}) {
+  const a = align ?? (numeric ? "right" : "left");
+  return `px-3 ${dense ? "py-1.5" : "py-2"} align-top first:pl-4 sm:first:pl-3 ${alignCls[a]} ${numeric ? "tabular-nums" : ""} ${extra}`;
+}
+
+/** Заголовок колонки: строка либо описание с выравниванием. */
+export type Head = ReactNode | { label: ReactNode; align?: Align; className?: string };
+
+function headParts(h: Head): { label: ReactNode; align: Align; className: string } {
+  if (h && typeof h === "object" && "label" in (h as object)) {
+    const o = h as { label: ReactNode; align?: Align; className?: string };
+    return { label: o.label, align: o.align ?? "left", className: o.className ?? "" };
+  }
+  return { label: h as ReactNode, align: "left", className: "" };
+}
+
+/**
+ * Простая таблица: заголовки + произвольные строки.
+ * Подходит, когда строки нестандартные (группировки, итоги); для обычных списков
+ * берите DataTable — он описывается колонками и меньше поводов разойтись в оформлении.
+ */
+export function Table({
+  head,
+  headRow,
+  colSpan,
+  children,
+  empty,
+  emptyText = "Нет данных",
+  footer,
+  dense,
+  maxHeight,
+}: {
+  head?: Head[];
+  /** Готовая строка заголовков — когда нужны свои ячейки (например, сортируемые). */
+  headRow?: ReactNode;
+  /** Число колонок для пустого состояния, если заголовки заданы через headRow. */
+  colSpan?: number;
+  children: ReactNode;
+  empty?: boolean;
+  emptyText?: string;
+  /** Строки итогов; получают оформление подвала. */
+  footer?: ReactNode;
+  dense?: boolean;
+  /** Ограничение высоты со скроллом внутри (длинные рабочие списки). */
+  maxHeight?: string;
+}) {
+  const span = colSpan ?? head?.length ?? 1;
   return (
-    <div className="-mx-4 overflow-x-auto overscroll-x-contain sm:mx-0 [-webkit-overflow-scrolling:touch]">
+    <div
+      className={`-mx-4 overflow-x-auto overscroll-x-contain sm:mx-0 [-webkit-overflow-scrolling:touch] ${maxHeight ? "overflow-y-auto" : ""}`}
+      style={maxHeight ? { maxHeight } : undefined}
+    >
       <table className="min-w-full text-sm">
         <thead className="sticky top-0 z-[1] bg-white">
-          <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
-            {head.map((h, i) => (
-              <th key={i} className="px-3 py-2 font-medium first:pl-4 sm:first:pl-3">{h}</th>
-            ))}
+          <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+            {headRow ??
+              (head ?? []).map((h, i) => {
+                const { label, align, className } = headParts(h);
+                return <th key={i} className={thCls(align, className)} scope="col">{label}</th>;
+              })}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {empty ? (
-            <tr><td colSpan={head.length} className="px-3 py-6 text-center text-slate-400">{emptyText}</td></tr>
+            <tr><td colSpan={span} className={`px-3 ${dense ? "py-6" : "py-8"} text-center text-slate-400`}>{emptyText}</td></tr>
           ) : children}
         </tbody>
+        {footer && <tfoot className="border-t border-slate-200 bg-slate-50 font-semibold">{footer}</tfoot>}
       </table>
     </div>
   );
 }
-export function Td({ children, className = "" }: { children?: ReactNode; className?: string }) {
-  return <td className={`px-3 py-2 align-top first:pl-4 sm:first:pl-3 ${className}`}>{children}</td>;
+
+export function Td({ children, className = "", align, numeric, dense, colSpan }: { children?: ReactNode; className?: string; align?: Align; numeric?: boolean; dense?: boolean; colSpan?: number }) {
+  return <td colSpan={colSpan} className={tdCls({ align, numeric, dense, extra: className })}>{children}</td>;
+}
+
+/**
+ * Компактная сводка «показатель → значение»: маленькие блоки на дашбордах и в отчётах.
+ * Это не таблица данных — здесь нет сортировки, скролла и заголовков колонок, поэтому
+ * примитив отдельный: так сводки не начинают жить по правилам больших таблиц.
+ */
+export function SummaryList({
+  title,
+  rows,
+  emptyText = "Нет данных",
+}: {
+  title?: ReactNode;
+  rows: { key: string; label: ReactNode; value: ReactNode }[];
+  emptyText?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      {title && <div className="mb-1 border-b border-slate-200 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>}
+      {rows.length ? (
+        <dl className="text-xs">
+          {rows.map((r) => (
+            <div key={r.key} className="flex items-baseline justify-between gap-2 border-b border-slate-100 py-1 last:border-0">
+              <dt className="min-w-0 truncate text-slate-600">{r.label}</dt>
+              <dd className="shrink-0 tabular-nums font-medium text-slate-900">{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="py-2 text-xs text-slate-400">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
+/** Описание колонки: заголовок, выравнивание и способ получить содержимое ячейки. */
+export type Column<T> = {
+  key: string;
+  header: ReactNode;
+  /** Поле сортировки; включает кликабельный заголовок (нужен sort у таблицы). */
+  sort?: string;
+  align?: Align;
+  /** Числовая колонка: моноширинные цифры, выравнивание вправо. */
+  numeric?: boolean;
+  className?: string;
+  headClassName?: string;
+  cell: (row: T, index: number) => ReactNode;
+};
+
+/**
+ * Таблица, описанная колонками. Единственное место, где задаётся раскладка списка,
+ * поэтому все списки в приложении выглядят одинаково, а модуль описывает только данные.
+ */
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  emptyText = "Нет данных",
+  dense,
+  footer,
+  sort,
+  rowClassName,
+}: {
+  columns: Column<T>[];
+  rows: T[];
+  rowKey: (row: T, index: number) => string | number;
+  emptyText?: string;
+  dense?: boolean;
+  footer?: ReactNode;
+  /** Текущая сортировка; без неё заголовки не кликабельны. */
+  sort?: { field?: string; dir?: string };
+  rowClassName?: (row: T, index: number) => string;
+}) {
+  const head: Head[] = columns.map((c) => ({
+    label: c.sort && sort ? <SortLink field={c.sort} current={sort.field} dir={sort.dir}>{c.header}</SortLink> : c.header,
+    align: c.align ?? (c.numeric ? "right" : "left"),
+    className: c.headClassName,
+  }));
+  return (
+    <Table head={head} empty={!rows.length} emptyText={emptyText} footer={footer} dense={dense}>
+      {rows.map((row, i) => (
+        <tr key={rowKey(row, i)} className={`hover:bg-slate-50 ${rowClassName?.(row, i) ?? ""}`}>
+          {columns.map((c) => (
+            <Td key={c.key} align={c.align} numeric={c.numeric} dense={dense} className={c.className}>
+              {c.cell(row, i)}
+            </Td>
+          ))}
+        </tr>
+      ))}
+    </Table>
+  );
 }
 
 export const inputCls = "w-full min-h-[2.5rem] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50";

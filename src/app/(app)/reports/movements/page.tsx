@@ -4,7 +4,7 @@ import { warehouses, catalogItems } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/page-auth";
 import { canSeePrices, canWithRole } from "@/lib/rbac";
-import { Card, PageHeader, Field, inputCls } from "@/components/ui";
+import { Card, PageHeader, Field, inputCls, Table, thCls, tdCls } from "@/components/ui";
 import { fmtQty, fmtDate, TX_LABELS } from "@/lib/labels";
 import { fmtMoney } from "@/lib/prices";
 import { movementsReport, parsePeriod, periodLabel, MOVEMENT_TYPES } from "@/lib/services/report-builder";
@@ -72,10 +72,13 @@ export default async function MovementsReportPage({ searchParams }: { searchPara
           </div>
           <div className="ml-auto"><ReportToolbar csvHref={`/api/v1/reports/movements?${query}&format=csv`} resetHref="/reports/movements" canExport={canExport} rows={rep.rows.length} /></div>
         </div>
-        <div className="-mx-4 overflow-x-auto sm:mx-0">
-          <table className="min-w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr className="border-b border-slate-200">
+        <Table
+          dense
+          colSpan={canPrices ? 9 : 8}
+          empty={!rep.rows.length}
+          emptyText="Движений по заданным условиям нет"
+          headRow={
+            <>
                 <SortTh field="date" current={sort} dir={dir}>Дата</SortTh>
                 <SortTh field="type" current={sort} dir={dir}>Операция</SortTh>
                 <SortTh field="item" current={sort} dir={dir}>Товар</SortTh>
@@ -84,32 +87,29 @@ export default async function MovementsReportPage({ searchParams }: { searchPara
                 <SortTh field="to" current={sort} dir={dir}>Куда</SortTh>
                 <SortTh field="document" current={sort} dir={dir}>Документ / заявка</SortTh>
                 <SortTh field="actor" current={sort} dir={dir}>Исполнитель</SortTh>
-                {canPrices && <th className="px-3 py-2 text-right font-medium">Сумма</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
+                {canPrices && <th className={thCls("right")} scope="col">Сумма</th>}
+            </>
+          }
+        >
               {rep.rows.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
                   <td className="whitespace-nowrap px-3 py-1.5 text-xs">{fmtDate(r.date)}</td>
-                  <td className="px-3 py-1.5 text-xs">{r.typeLabel}</td>
-                  <td className="px-3 py-1.5"><div className="font-medium">{r.name}</div><div className="text-[11px] text-slate-500">{r.code} · {r.sku}{r.serialNumber ? ` · S/N ${r.serialNumber}` : ""}</div></td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(r.quantity)} {r.unit}</td>
-                  <td className="px-3 py-1.5 text-xs">{r.from}</td>
-                  <td className="px-3 py-1.5 text-xs">{r.to}</td>
-                  <td className="px-3 py-1.5 text-xs">
+                  <td className={tdCls({ dense: true, extra: "text-xs" })}>{r.typeLabel}</td>
+                  <td className={tdCls({ dense: true })}><div className="font-medium">{r.name}</div><div className="text-[11px] text-slate-500">{r.code} · {r.sku}{r.serialNumber ? ` · S/N ${r.serialNumber}` : ""}</div></td>
+                  <td className={tdCls({ numeric: true, dense: true })}>{fmtQty(r.quantity)} {r.unit}</td>
+                  <td className={tdCls({ dense: true, extra: "text-xs" })}>{r.from}</td>
+                  <td className={tdCls({ dense: true, extra: "text-xs" })}>{r.to}</td>
+                  <td className={tdCls({ dense: true, extra: "text-xs" })}>
                     {r.documentId ? <Link href={`/inventory/documents/${r.documentId}`} className="font-mono text-indigo-600">{r.document}</Link> : null}
                     {r.ticketId ? <Link href={`/tickets/${r.ticketId}`} className="ml-1 font-mono text-indigo-600">{r.ticketNumber}</Link> : null}
                     {r.clientName ? <div className="text-[11px] text-slate-500">{r.clientName}{r.siteName ? ` · ${r.siteName}` : ""}</div> : null}
                     {r.note && <div className="text-[11px] text-slate-400">{r.note}</div>}
                   </td>
-                  <td className="px-3 py-1.5 text-xs">{r.actor ?? "—"}</td>
-                  {canPrices && <td className="px-3 py-1.5 text-right text-xs tabular-nums">{fmtMoney(r.sum)}</td>}
+                  <td className={tdCls({ dense: true, extra: "text-xs" })}>{r.actor ?? "—"}</td>
+                  {canPrices && <td className={tdCls({ numeric: true, dense: true, extra: "text-xs" })}>{fmtMoney(r.sum)}</td>}
                 </tr>
               ))}
-              {!rep.rows.length && <tr><td colSpan={canPrices ? 9 : 8} className="px-3 py-8 text-center text-slate-400">Движений по заданным условиям нет</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        </Table>
         <PrintFooter />
       </Card>
     </div>

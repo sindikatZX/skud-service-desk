@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/page-auth";
 import { dashboardSummary, teamsStockSummary } from "@/lib/services/reports";
 import { listTickets } from "@/lib/services/tickets";
-import { Card, PageHeader, Stat, StatusBadge, Table, Td, Fab } from "@/components/ui";
+import { Card, PageHeader, Stat, Table, Td, Fab } from "@/components/ui";
+import { StatusBadge } from "@/components/status-badges";
 import { fmtDate } from "@/lib/labels";
 import { can } from "@/lib/rbac";
 

@@ -4,7 +4,7 @@ import { warehouses, catalogCategories } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/page-auth";
 import { canSeePrices, canWithRole } from "@/lib/rbac";
-import { Card, PageHeader, Field, inputCls } from "@/components/ui";
+import { Card, PageHeader, Field, inputCls, Table, thCls, tdCls } from "@/components/ui";
 import { fmtQty } from "@/lib/labels";
 import { fmtMoney } from "@/lib/prices";
 import { stockReport, parsePeriod, periodLabel } from "@/lib/services/report-builder";
@@ -65,31 +65,31 @@ export default async function StockReportPage({ searchParams }: { searchParams: 
       <Card className="print-area">
         <PrintHeader appName={branding.appName} title="Отчёт остатков" period={periodLabel(period)} filters={filters} user={user.fullName} />
         <div className="mb-3"><ReportToolbar csvHref={`/api/v1/reports/stock?${query}&format=csv`} resetHref="/reports/stock" canExport={canExport} rows={rep.rows.length} /></div>
-        <div className="-mx-4 overflow-x-auto sm:mx-0">
-          <table className="min-w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr className="border-b border-slate-200">
+        <Table
+          dense
+          colSpan={canPrices ? 12 : 10}
+          empty={!rep.rows.length}
+          emptyText="Нет данных за выбранный период"
+          headRow={
+            <>
                 <SortTh field="warehouse" current={sort} dir={dir}>Склад</SortTh>
                 <SortTh field="code" current={sort} dir={dir}>Код</SortTh>
                 <SortTh field="sku" current={sort} dir={dir}>Артикул</SortTh>
                 <SortTh field="name" current={sort} dir={dir}>Наименование</SortTh>
                 <SortTh field="category" current={sort} dir={dir}>Категория</SortTh>
-                <th className="px-3 py-2 font-medium">Ед.</th>
+                <th className={thCls()} scope="col">Ед.</th>
                 <SortTh field="opening" current={sort} dir={dir} className="text-right">Нач. ост.</SortTh>
                 <SortTh field="income" current={sort} dir={dir} className="text-right">Приход</SortTh>
                 <SortTh field="outcome" current={sort} dir={dir} className="text-right">Расход</SortTh>
                 <SortTh field="closing" current={sort} dir={dir} className="text-right">Кон. ост.</SortTh>
-                {canPrices && <><th className="px-3 py-2 text-right font-medium">Цена</th><th className="px-3 py-2 text-right font-medium">Сумма</th></>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rep.totals.map((t) => (
-                <FragmentRows key={t.warehouseId} t={t} rows={rep.rows.filter((r) => r.warehouseId === t.warehouseId)} canPrices={canPrices} />
-              ))}
-              {!rep.rows.length && <tr><td colSpan={canPrices ? 12 : 10} className="px-3 py-8 text-center text-slate-400">Нет данных за выбранный период</td></tr>}
-            </tbody>
-          </table>
-        </div>
+                {canPrices && <><th className={thCls("right")} scope="col">Цена</th><th className={thCls("right")} scope="col">Сумма</th></>}
+            </>
+          }
+        >
+          {rep.totals.map((t) => (
+            <FragmentRows key={t.warehouseId} t={t} rows={rep.rows.filter((r) => r.warehouseId === t.warehouseId)} canPrices={canPrices} />
+          ))}
+        </Table>
         <PrintFooter />
       </Card>
     </div>
@@ -102,27 +102,27 @@ function FragmentRows({ t, rows, canPrices }: { t: { warehouseName: string; item
     <>
       {rows.map((r) => (
         <tr key={`${r.warehouseId}-${r.itemId}`} className="hover:bg-slate-50">
-          <td className="px-3 py-1.5 text-xs text-slate-500">{r.warehouseName}</td>
-          <td className="px-3 py-1.5 font-mono text-xs">{r.code}</td>
-          <td className="px-3 py-1.5 text-xs">{r.sku}</td>
-          <td className="px-3 py-1.5 font-medium">{r.name}</td>
-          <td className="px-3 py-1.5 text-xs text-slate-500">{r.category}</td>
-          <td className="px-3 py-1.5 text-xs">{r.unit}</td>
-          <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(r.opening)}</td>
-          <td className="px-3 py-1.5 text-right tabular-nums text-emerald-700">{r.income ? `+${fmtQty(r.income)}` : "—"}</td>
-          <td className="px-3 py-1.5 text-right tabular-nums text-rose-700">{r.outcome ? `−${fmtQty(r.outcome)}` : "—"}</td>
-          <td className={`px-3 py-1.5 text-right font-semibold tabular-nums ${r.closing < 0 ? "text-rose-600" : ""}`}>{fmtQty(r.closing)}</td>
-          {canPrices && <><td className="px-3 py-1.5 text-right tabular-nums text-xs">{fmtMoney(r.price)}</td><td className="px-3 py-1.5 text-right tabular-nums text-xs">{fmtMoney(r.closingSum)}</td></>}
+          <td className={tdCls({ dense: true, extra: "text-xs text-slate-500" })}>{r.warehouseName}</td>
+          <td className={tdCls({ dense: true, extra: "font-mono text-xs" })}>{r.code}</td>
+          <td className={tdCls({ dense: true, extra: "text-xs" })}>{r.sku}</td>
+          <td className={tdCls({ dense: true, extra: "font-medium" })}>{r.name}</td>
+          <td className={tdCls({ dense: true, extra: "text-xs text-slate-500" })}>{r.category}</td>
+          <td className={tdCls({ dense: true, extra: "text-xs" })}>{r.unit}</td>
+          <td className={tdCls({ numeric: true, dense: true })}>{fmtQty(r.opening)}</td>
+          <td className={tdCls({ numeric: true, dense: true, extra: "text-emerald-700" })}>{r.income ? `+${fmtQty(r.income)}` : "—"}</td>
+          <td className={tdCls({ numeric: true, dense: true, extra: "text-rose-700" })}>{r.outcome ? `−${fmtQty(r.outcome)}` : "—"}</td>
+          <td className={tdCls({ numeric: true, dense: true, extra: `font-semibold ${r.closing < 0 ? "text-rose-600" : ""}` })}>{fmtQty(r.closing)}</td>
+          {canPrices && <><td className={tdCls({ numeric: true, dense: true, extra: "text-xs" })}>{fmtMoney(r.price)}</td><td className={tdCls({ numeric: true, dense: true, extra: "text-xs" })}>{fmtMoney(r.closingSum)}</td></>}
         </tr>
       ))}
       <tr className="bg-slate-50 font-semibold">
-        <td className="px-3 py-1.5 text-xs" colSpan={3}>Итого: {t.warehouseName}</td>
-        <td className="px-3 py-1.5 text-xs" colSpan={3}>{t.items} поз.</td>
-        <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(t.opening)}</td>
-        <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(t.income)}</td>
-        <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(t.outcome)}</td>
-        <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(t.closing)}</td>
-        {canPrices && <><td /><td className="px-3 py-1.5 text-right tabular-nums text-xs">{fmtMoney(t.closingSum)}</td></>}
+        <td className={tdCls({ dense: true, extra: "text-xs" })} colSpan={3}>Итого: {t.warehouseName}</td>
+        <td className={tdCls({ dense: true, extra: "text-xs" })} colSpan={3}>{t.items} поз.</td>
+        <td className={tdCls({ numeric: true, dense: true })}>{fmtQty(t.opening)}</td>
+        <td className={tdCls({ numeric: true, dense: true })}>{fmtQty(t.income)}</td>
+        <td className={tdCls({ numeric: true, dense: true })}>{fmtQty(t.outcome)}</td>
+        <td className={tdCls({ numeric: true, dense: true })}>{fmtQty(t.closing)}</td>
+        {canPrices && <><td /><td className={tdCls({ numeric: true, dense: true, extra: "text-xs" })}>{fmtMoney(t.closingSum)}</td></>}
       </tr>
     </>
   );

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireUser } from "@/lib/page-auth";
 import { listTickets } from "@/lib/services/tickets";
 import { listTeamsWithDetails } from "@/lib/services/teams";
-import { Card, PageHeader, StatusBadge, Table, Td, inputCls, Fab, Chips, Badge, btnFilterCls, btnFilterResetCls } from "@/components/ui";
+import { Card, PageHeader, Table, Td, inputCls, Fab, Chips, Badge, btnFilterCls, btnFilterResetCls } from "@/components/ui";
+import { StatusBadge } from "@/components/status-badges";
 import { fmtDate, STATUS_LABELS } from "@/lib/labels";
 import { can } from "@/lib/rbac";
 

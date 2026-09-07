@@ -3,7 +3,8 @@ import { requireUser } from "@/lib/page-auth";
 import { listTeamsWithDetails } from "@/lib/services/teams";
 import { getStock, listTransactions } from "@/lib/services/inventory";
 import { listTickets } from "@/lib/services/tickets";
-import { Card, PageHeader, StatusBadge, Table, Td, Empty } from "@/components/ui";
+import { Card, PageHeader, Table, Td, Empty } from "@/components/ui";
+import { StatusBadge } from "@/components/status-badges";
 import { StockView } from "@/components/StockView";
 import { fmtDate, fmtQty, TX_LABELS } from "@/lib/labels";
 

@@ -6,7 +6,8 @@ import { eq, asc } from "drizzle-orm";
 import { requireUser } from "@/lib/page-auth";
 import { can } from "@/lib/rbac";
 import { serviceHistory } from "@/lib/services/tickets";
-import { Card, PageHeader, StatusBadge, Table, Td } from "@/components/ui";
+import { Card, PageHeader, Table, Td } from "@/components/ui";
+import { StatusBadge } from "@/components/status-badges";
 import { QuickForm, ActionButton } from "@/components/QuickForm";
 import { fmtDate } from "@/lib/labels";
 

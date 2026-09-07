@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getUnitHistory } from "@/lib/services/inventory";
-import { Card, PageHeader, UnitStatusBadge } from "@/components/ui";
+import { Card, PageHeader } from "@/components/ui";
+import { UnitStatusBadge } from "@/components/status-badges";
 import { DeleteUnitButton } from "./DeleteUnitButton";
 import { fmtDate, TX_LABELS, LOC_LABELS } from "@/lib/labels";
 import { can } from "@/lib/rbac";

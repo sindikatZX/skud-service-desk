@@ -7,7 +7,8 @@ import { requireUser } from "@/lib/page-auth";
 import { can } from "@/lib/rbac";
 import { serviceHistory } from "@/lib/services/tickets";
 import { getSiteEquipment } from "@/lib/services/inventory";
-import { Card, PageHeader, StatusBadge, Table, Td, UnitStatusBadge } from "@/components/ui";
+import { Card, PageHeader, Table, Td } from "@/components/ui";
+import { StatusBadge, UnitStatusBadge } from "@/components/status-badges";
 import { QuickForm } from "@/components/QuickForm";
 import { fmtDate, fmtQty } from "@/lib/labels";
 
