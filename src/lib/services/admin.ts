@@ -306,7 +306,27 @@ export async function dbStats() {
       last_vacuum, last_autovacuum, last_analyze, last_autoanalyze
     from pg_stat_user_tables where schemaname = 'public' order by relname`);
   const s = size.rows[0] as { size: string; name: string; version: string };
-  return { size: s.size, name: s.name, version: s.version.split(" on ")[0], tables: tables.rows as { table: string; rows: number; dead: number; size: string; last_vacuum: Date | null; last_autovacuum: Date | null; last_analyze: Date | null; last_autoanalyze: Date | null }[] };
+  // Сырой запрос через db.execute отдаёт временные метки строками, а не Date,
+  // поэтому приводим их к ISO здесь — наружу уходит уже готовое к выводу значение.
+  type RawRow = {
+    table: string; rows: number; dead: number; size: string;
+    last_vacuum: Date | string | null; last_autovacuum: Date | string | null;
+    last_analyze: Date | string | null; last_autoanalyze: Date | string | null;
+  };
+  const iso = (v: Date | string | null | undefined): string | null => {
+    if (!v) return null;
+    const d = v instanceof Date ? v : new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  };
+  const rows = (tables.rows as RawRow[]).map((t) => ({
+    table: t.table,
+    rows: t.rows,
+    dead: t.dead,
+    size: t.size,
+    lastVacuum: iso(t.last_autovacuum ?? t.last_vacuum),
+    lastAnalyze: iso(t.last_autoanalyze ?? t.last_analyze),
+  }));
+  return { size: s.size, name: s.name, version: s.version.split(" on ")[0], tables: rows };
 }
 
 export async function maintenance(action: "vacuum" | "analyze" | "reindex") {

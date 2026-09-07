@@ -1,4 +1,25 @@
 import type { NextConfig } from "next";
+import { networkInterfaces } from "node:os";
+
+/**
+ * Адреса, с которых разрешено обращаться к dev-ресурсам Next (HMR и т. п.).
+ * Нужно при проверке PWA с телефона: `next dev -H 0.0.0.0`, а на телефоне
+ * открыт http://<ip-компьютера>:3000 — для Next это уже сторонний источник.
+ *
+ * Список собирается из локальных адресов машины, поэтому смена IP роутером
+ * ничего не ломает и в репозиторий не попадает чей-то конкретный адрес.
+ * Дополнительные хосты можно передать через DEV_ORIGINS (через запятую).
+ */
+const devOrigins = [
+  ...new Set([
+    ...Object.values(networkInterfaces())
+      .flat()
+      .filter((i): i is NonNullable<typeof i> => Boolean(i) && i!.family === "IPv4" && !i!.internal)
+      .map((i) => i.address),
+    ...(process.env.DEV_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
+  ]),
+];
+
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -8,7 +29,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ['192.168.1.46', '192.168.1.46:3000'],
+  allowedDevOrigins: devOrigins,
   poweredByHeader: false,
   output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   async headers() {

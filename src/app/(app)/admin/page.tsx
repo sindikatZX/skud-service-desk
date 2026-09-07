@@ -27,7 +27,7 @@ export default async function AdminPage() {
         canMaint={canMaint}
         backupDir={BACKUP_DIR}
         backups={backups.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() }))}
-        stats={{ ...stats, tables: stats.tables.map((t) => ({ table: t.table, rows: t.rows, dead: t.dead, size: t.size, lastVacuum: (t.last_autovacuum ?? t.last_vacuum)?.toISOString() ?? null, lastAnalyze: (t.last_autoanalyze ?? t.last_analyze)?.toISOString() ?? null })) }}
+        stats={stats}
         integrity={integrity ? { ...integrity, checkedAt: integrity.checkedAt.toISOString() } : null}
       />
     </div>
