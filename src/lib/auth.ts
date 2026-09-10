@@ -7,8 +7,26 @@ import { eq, and, isNull } from "drizzle-orm";
 import { isPermission, type Permission } from "@/lib/rbac";
 
 const COOKIE_NAME = "fsm_session";
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret-change-me-in-production");
 const SESSION_TTL_SEC = 60 * 60 * 24 * 14; // 14 дней
+
+/**
+ * Ключ подписи сессий.
+ *
+ * В рабочей установке он обязателен: со значением по умолчанию любой, кто знает
+ * исходный код, подписал бы себе токен администратора. Поэтому в production при
+ * отсутствии (или слишком коротком) AUTH_SECRET приложение отказывается выдавать
+ * и проверять сессии — молча работать с известным ключом опаснее, чем не работать.
+ * В разработке остаётся запасной ключ, чтобы не мешать запуску.
+ */
+const MIN_SECRET_LENGTH = 32;
+const DEV_SECRET = "dev-secret-change-me-in-production";
+function sessionSecret() {
+  const raw = process.env.AUTH_SECRET ?? "";
+  if (process.env.NODE_ENV === "production" && (raw.length < MIN_SECRET_LENGTH || raw === DEV_SECRET)) {
+    throw new Error(`AUTH_SECRET не задан или короче ${MIN_SECRET_LENGTH} символов — вход отключён. Задайте случайную строку в переменных окружения.`);
+  }
+  return new TextEncoder().encode(raw || DEV_SECRET);
+}
 
 export type SessionUser = {
   id: number;
@@ -33,6 +51,7 @@ export async function verifyPassword(pw: string, hash: string) {
 }
 
 export async function signToken(userId: number) {
+  const secret = sessionSecret();
   return new SignJWT({ sub: String(userId) })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -40,10 +59,12 @@ export async function signToken(userId: number) {
     .sign(secret);
 }
 
-export async function verifyToken(token: string): Promise<number | null> {
+/** Идентификатор пользователя и момент выдачи токена (нужен для отзыва старых сессий). */
+export async function verifyToken(token: string): Promise<{ userId: number; issuedAt: number } | null> {
   try {
-    const { payload } = await jwtVerify(token, secret);
-    return payload.sub ? Number(payload.sub) : null;
+    const { payload } = await jwtVerify(token, sessionSecret());
+    if (!payload.sub) return null;
+    return { userId: Number(payload.sub), issuedAt: (payload.iat ?? 0) * 1000 };
   } catch {
     return null;
   }
@@ -65,13 +86,14 @@ export async function clearSessionCookie() {
   c.set(COOKIE_NAME, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
-export async function loadSessionUser(userId: number): Promise<SessionUser | null> {
+export async function loadSessionUser(userId: number, issuedAt?: number): Promise<SessionUser | null> {
   const [row] = await db
     .select({
       id: users.id,
       email: users.email,
       fullName: users.fullName,
       isActive: users.isActive,
+      passwordChangedAt: users.passwordChangedAt,
       clientId: users.clientId,
       roleId: roles.id,
       roleCode: roles.code,
@@ -88,6 +110,9 @@ export async function loadSessionUser(userId: number): Promise<SessionUser | nul
     .limit(1);
   // Отключённая роль лишает доступа так же, как отключённый пользователь.
   if (!row || !row.isActive || !row.roleActive) return null;
+  // Смена пароля обрывает ранее выданные сессии: иначе украденный токен жил бы
+  // до истечения срока, даже когда владелец уже сменил пароль
+  if (issuedAt !== undefined && row.passwordChangedAt && issuedAt < row.passwordChangedAt.getTime()) return null;
   const [tm] = await db
     .select({ teamId: teamMembers.teamId })
     .from(teamMembers)
@@ -121,7 +146,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     token = c.get(COOKIE_NAME)?.value;
   }
   if (!token) return null;
-  const uid = await verifyToken(token);
-  if (!uid) return null;
-  return loadSessionUser(uid);
+  const claims = await verifyToken(token);
+  if (!claims) return null;
+  return loadSessionUser(claims.userId, claims.issuedAt);
 }

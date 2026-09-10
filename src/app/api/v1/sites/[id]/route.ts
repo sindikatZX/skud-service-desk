@@ -27,7 +27,9 @@ export const PATCH = withAuth(async (req, { params }) => {
   return ok(s);
 }, ["sites.manage"]);
 
-export const DELETE = withAuth(async (_req, { params }) => {
-  await deleteSite(parseId(params));
+export const DELETE = withAuth(async (_req, { params, audit }) => {
+  const id = parseId(params);
+  const { label } = await deleteSite(id);
+  audit.set({ entity: "site", entityId: id, entityLabel: label, summary: `Удалил объект «${label}»` });
   return ok({ deleted: true });
 }, ["sites.manage"]);

@@ -21,7 +21,28 @@ const devOrigins = [
 ];
 
 
+/**
+ * Политика содержимого. Next вставляет в страницы собственные inline-скрипты
+ * гидратации, поэтому script-src допускает 'unsafe-inline'; всё остальное
+ * (сторонние скрипты, кадры, отправка данных наружу) запрещено, а формы и база
+ * ограничены собственным адресом — это закрывает подмену цели отправки данных.
+ */
+const csp = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'self'",
+].join("; ");
+
 const securityHeaders = [
+  { key: "Content-Security-Policy", value: csp },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

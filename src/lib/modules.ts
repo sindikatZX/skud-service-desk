@@ -86,7 +86,7 @@ export const MODULES: AppModule[] = [
   },
   { id: "staff", name: "Сотрудники и роли", description: "Учётные записи, роли и права доступа.", core: true, sections: ["Сотрудники"], permissions: ["users.manage"] },
   { id: "directories", name: "Справочники", description: "Списки, из которых заполняются формы: типы, категории, единицы измерения.", core: true, sections: ["Справочники"], permissions: ["directories.manage"] },
-  { id: "admin", name: "Администрирование", description: "Оформление, резервные копии, обслуживание и очистка базы.", core: true, sections: ["Администрирование"], permissions: ["admin.backup", "admin.maintenance"] },
+  { id: "admin", name: "Администрирование", description: "Оформление, резервные копии, обслуживание и очистка базы.", core: true, sections: ["Администрирование"], permissions: ["admin.backup", "admin.maintenance", "audit.view"] },
 ];
 
 export const MODULE_BY_ID = new Map(MODULES.map((m) => [m.id, m]));

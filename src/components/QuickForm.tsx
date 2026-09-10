@@ -17,6 +17,11 @@ export type QF = {
   hint?: string;
   /** приводить значение к числу (для select с id) */
   numeric?: boolean;
+  /**
+   * Пустое поле очищает значение (отправляется null), а не пропускается.
+   * Нужно формам редактирования: иначе описание или код 1С нельзя стереть.
+   */
+  nullable?: boolean;
 };
 
 type Props = {
@@ -49,7 +54,8 @@ export function QuickForm({ title, endpoint, method = "POST", fields, submitLabe
       if (f.type === "checkbox") data[f.name] = fd.get(f.name) === "on";
       else {
         const v = fd.get(f.name);
-        data[f.name] = v === "" || v === null ? undefined : f.type === "number" || f.numeric ? Number(v) : String(v);
+        const empty = v === "" || v === null;
+        data[f.name] = empty ? (f.nullable ? null : undefined) : f.type === "number" || f.numeric ? Number(v) : String(v);
       }
     }
     if (extra) data = { ...data, ...extra };

@@ -25,7 +25,9 @@ export const PATCH = withAuth(async (req, { params }) => {
   return ok(t);
 }, ["teams.manage"]);
 
-export const DELETE = withAuth(async (_req, { params }) => {
-  await deleteTeam(parseId(params));
+export const DELETE = withAuth(async (_req, { params, audit }) => {
+  const id = parseId(params);
+  const { label } = await deleteTeam(id);
+  audit.set({ entity: "team", entityId: id, entityLabel: label, summary: `Удалил бригаду «${label}»` });
   return ok({ deleted: true });
 }, ["teams.manage"]);

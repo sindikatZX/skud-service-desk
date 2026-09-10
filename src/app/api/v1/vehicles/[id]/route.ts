@@ -16,7 +16,9 @@ export const PATCH = withAuth(async (req, { params }) => {
   return ok(v);
 }, ["vehicles.manage"]);
 
-export const DELETE = withAuth(async (_req, { params }) => {
-  await deleteVehicle(parseId(params));
+export const DELETE = withAuth(async (_req, { params, audit }) => {
+  const id = parseId(params);
+  const { label } = await deleteVehicle(id);
+  audit.set({ entity: "vehicle", entityId: id, entityLabel: label, summary: `Удалил автомобиль «${label}»` });
   return ok({ deleted: true });
 }, ["vehicles.manage"]);

@@ -223,6 +223,8 @@ export const users = pgTable(
       .references(() => roles.id),
     clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
     isActive: boolean("is_active").notNull().default(true),
+    /** Когда в последний раз меняли пароль: выданные до этого момента сессии недействительны. */
+    passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("users_email_idx").on(t.email)],
@@ -695,6 +697,45 @@ export const appSettings = pgTable("app_settings", {
  * при старте досоздаются, если их нет; чтобы удалённая пользователем запись не
  * возвращалась после перезапуска, факт удаления запоминается здесь.
  */
+/**
+ * Журнал действий: кто, когда и что сделал.
+ *
+ * Пишется автоматически на слое API для всех изменяющих запросов, поэтому в журнал
+ * попадает любое действие пользователя, а не только те, которые кто-то не забыл
+ * залогировать. Имя исполнителя и название объекта сохраняются строками: запись
+ * остаётся читаемой после удаления сотрудника или самого объекта.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: serial("id").primaryKey(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    actorId: integer("actor_id").references(() => users.id, { onDelete: "set null" }),
+    actorName: text("actor_name").notNull().default(""),
+    actorRole: text("actor_role"),
+    /** Что сделали: create | update | delete | login | logout | operation */
+    action: text("action").notNull(),
+    /** Над чем: ticket | catalog_item | warehouse | chat_message … */
+    entity: text("entity").notNull().default(""),
+    entityId: integer("entity_id"),
+    /** Человекочитаемое имя объекта на момент действия. */
+    entityLabel: text("entity_label"),
+    /** Готовая фраза для журнала: «Списал 3 шт «Кабель UTP» с центрального склада». */
+    summary: text("summary").notNull(),
+    method: text("method"),
+    path: text("path"),
+    status: integer("status"),
+    /** Подробности: переданные поля, изменения «было → стало». */
+    details: jsonb("details").$type<unknown>(),
+    ip: text("ip"),
+  },
+  (t) => [
+    index("audit_at_idx").on(t.at),
+    index("audit_actor_idx").on(t.actorId),
+    index("audit_entity_idx").on(t.entity, t.entityId),
+  ],
+);
+
 export const systemRowTombstones = pgTable(
   "system_row_tombstones",
   {

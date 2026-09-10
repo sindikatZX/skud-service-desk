@@ -48,7 +48,8 @@ export type Permission =
   | "reports.works"
   | "reports.export"
   | "admin.backup"
-  | "admin.maintenance";
+  | "admin.maintenance"
+  | "audit.view";
 
 /** Каталог прав для экрана редактирования роли: группа → права с описанием. */
 export const PERMISSION_GROUPS: { group: string; items: { key: Permission; label: string }[] }[] = [
@@ -133,6 +134,7 @@ export const PERMISSION_GROUPS: { group: string; items: { key: Permission; label
     items: [
       { key: "admin.backup", label: "Резервные копии: создание, скачивание, восстановление" },
       { key: "admin.maintenance", label: "Обслуживание БД: очистка данных, проверка и исправление целостности" },
+      { key: "audit.view", label: "Журнал действий: кто что сделал в системе" },
     ],
   },
 ];
@@ -145,7 +147,7 @@ export const ADDED_PERMISSIONS: Permission[] = [
   "directories.manage", "tickets.reopen", "inventory.transfer", "data.import", "data.export",
   "catalog.prices.view", "catalog.prices.manage",
   "reports.stock", "reports.movements", "reports.works", "reports.export",
-  "admin.backup", "admin.maintenance",
+  "admin.backup", "admin.maintenance", "audit.view",
 ];
 
 export const ALL_PERMISSIONS: Permission[] = PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => i.key));

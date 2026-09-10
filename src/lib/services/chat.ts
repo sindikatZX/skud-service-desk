@@ -149,6 +149,8 @@ export async function deleteMessage(user: SessionUser, messageId: number) {
   if (msg.authorId !== user.id && !canModerate(user)) throw forbidden("Удалить можно только своё сообщение");
   await deleteForComment(messageId);
   await db.delete(ticketComments).where(eq(ticketComments.id, messageId));
+  // Возвращаем удалённое: журнал действий должен сохранить, что именно исчезло
+  return { ticketId: msg.ticketId, text: msg.text, authorName: msg.authorName, isInternal: msg.isInternal, createdAt: msg.createdAt };
 }
 
 /** Количество сообщений по заявке — для бейджа в списке заявок. */

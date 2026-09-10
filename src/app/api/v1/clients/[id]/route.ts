@@ -24,7 +24,9 @@ export const PATCH = withAuth(async (req, { params }) => {
   return ok(c);
 }, ["clients.manage"]);
 
-export const DELETE = withAuth(async (_req, { params }) => {
-  await deleteClient(parseId(params));
+export const DELETE = withAuth(async (_req, { params, audit }) => {
+  const id = parseId(params);
+  const { label } = await deleteClient(id);
+  audit.set({ entity: "client", entityId: id, entityLabel: label, summary: `Удалил клиента «${label}»` });
   return ok({ deleted: true });
 }, ["clients.manage"]);

@@ -302,6 +302,17 @@ export const documentsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(1000).optional(),
 });
 
+export const auditQuerySchema = z.object({
+  from: dateish,
+  to: dateish,
+  actorId: z.coerce.number().int().positive().optional(),
+  action: z.string().trim().max(20).optional(),
+  entity: z.string().trim().max(40).optional(),
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
+
 export const unitUpdateSchema = z.object({
   macAddress: optionalText(60),
   notes: optionalText(500),

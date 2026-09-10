@@ -16,9 +16,10 @@ export const PATCH = withAuth(async (req, { user, params }) => {
   return ok(await updateTicket(user, parseId(params), b));
 }, ["tickets.assign", "tickets.work"]);
 
-export const DELETE = withAuth(async (_req, { user, params }) => {
+export const DELETE = withAuth(async (_req, { user, params, audit }) => {
   const id = parseId(params);
   await getTicketDetails(user, id); // заявка должна быть видна пользователю
-  await deleteTicket(id);
+  const { label } = await deleteTicket(id);
+  audit.set({ entity: "ticket", entityId: id, entityLabel: label, summary: `Удалил заявку ${label}` });
   return ok({ deleted: true });
 }, ["tickets.delete"]);

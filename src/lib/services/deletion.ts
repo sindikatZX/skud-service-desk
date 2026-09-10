@@ -60,7 +60,7 @@ async function mustExist<T>(rows: T[], message: string): Promise<T> {
 // ─────────────────────────── КЛИЕНТЫ И ОБЪЕКТЫ ───────────────────────────
 
 export async function deleteClient(id: number) {
-  await mustExist(await db.select({ id: clients.id }).from(clients).where(eq(clients.id, id)), "Клиент не найден");
+  const was = await mustExist(await db.select({ id: clients.id, name: clients.name }).from(clients).where(eq(clients.id, id)), "Клиент не найден");
   assertFree(
     "клиента",
     await blockersOf([
@@ -71,10 +71,11 @@ export async function deleteClient(id: number) {
     ]),
   );
   await db.delete(clients).where(eq(clients.id, id));
+  return { label: was.name };
 }
 
 export async function deleteSite(id: number) {
-  await mustExist(await db.select({ id: sites.id }).from(sites).where(eq(sites.id, id)), "Объект не найден");
+  const was = await mustExist(await db.select({ id: sites.id, name: sites.name }).from(sites).where(eq(sites.id, id)), "Объект не найден");
   assertFree(
     "объект",
     await blockersOf([
@@ -84,13 +85,14 @@ export async function deleteSite(id: number) {
     ]),
   );
   await db.delete(sites).where(eq(sites.id, id));
+  return { label: was.name };
 }
 
 // ─────────────────────────── СОТРУДНИКИ ───────────────────────────
 
 export async function deleteUser(actor: SessionUser, id: number) {
   const target = await mustExist(
-    await db.select({ id: users.id, roleId: users.roleId }).from(users).where(eq(users.id, id)),
+    await db.select({ id: users.id, roleId: users.roleId, fullName: users.fullName, email: users.email }).from(users).where(eq(users.id, id)),
     "Сотрудник не найден",
   );
   if (actor.id === id) throw forbidden("Нельзя удалить собственную учётную запись");
@@ -121,12 +123,13 @@ export async function deleteUser(actor: SessionUser, id: number) {
 
   // Членство в бригадах удаляется каскадом; авторство в заявках/чате обнуляется.
   await db.delete(users).where(eq(users.id, id));
+  return { label: `${target.fullName} (${target.email})` };
 }
 
 // ─────────────────────────── БРИГАДЫ И ТЕХНИКА ───────────────────────────
 
 export async function deleteTeam(id: number) {
-  await mustExist(await db.select({ id: teams.id }).from(teams).where(eq(teams.id, id)), "Бригада не найдена");
+  const was = await mustExist(await db.select({ id: teams.id, name: teams.name }).from(teams).where(eq(teams.id, id)), "Бригада не найдена");
   assertFree(
     "бригаду",
     await blockersOf([
@@ -148,13 +151,15 @@ export async function deleteTeam(id: number) {
   );
   // Состав и закрепление техники удаляются каскадом.
   await db.delete(teams).where(eq(teams.id, id));
+  return { label: was.name };
 }
 
 export async function deleteVehicle(id: number) {
-  await mustExist(await db.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.id, id)), "Автомобиль не найден");
+  const was = await mustExist(await db.select({ id: vehicles.id, plate: vehicles.plateNumber, model: vehicles.model }).from(vehicles).where(eq(vehicles.id, id)), "Автомобиль не найден");
   const active = await countOf(vehicleAssignments, and(eq(vehicleAssignments.vehicleId, id), isNull(vehicleAssignments.releasedAt)));
   if (active > 0) throw conflict("Автомобиль закреплён за бригадой — сначала открепите его");
   await db.delete(vehicles).where(eq(vehicles.id, id));
+  return { label: [was.model, was.plate].filter(Boolean).join(" ") };
 }
 
 export async function removeTeamMember(teamId: number, userId: number) {
@@ -169,7 +174,7 @@ export async function removeTeamMember(teamId: number, userId: number) {
 // ─────────────────────────── НОМЕНКЛАТУРА И ОБОРУДОВАНИЕ ───────────────────────────
 
 export async function deleteCatalogItem(id: number) {
-  await mustExist(await db.select({ id: catalogItems.id }).from(catalogItems).where(eq(catalogItems.id, id)), "Позиция не найдена");
+  const was = await mustExist(await db.select({ id: catalogItems.id, name: catalogItems.name }).from(catalogItems).where(eq(catalogItems.id, id)), "Позиция не найдена");
   assertFree(
     "позицию номенклатуры",
     await blockersOf([
@@ -198,7 +203,7 @@ export async function deleteCatalogItem(id: number) {
  */
 export async function deleteEquipmentUnit(id: number) {
   const unit = await mustExist(
-    await db.select({ id: equipmentUnits.id, status: equipmentUnits.status }).from(equipmentUnits).where(eq(equipmentUnits.id, id)),
+    await db.select({ id: equipmentUnits.id, status: equipmentUnits.status, serialNumber: equipmentUnits.serialNumber }).from(equipmentUnits).where(eq(equipmentUnits.id, id)),
     "Единица оборудования не найдена",
   );
   if (unit.status === "installed") throw conflict("Единица установлена на объекте — удаление исказит историю обслуживания");
@@ -210,6 +215,7 @@ export async function deleteEquipmentUnit(id: number) {
     await tx.delete(stockTransactions).where(eq(stockTransactions.unitId, id));
     await tx.delete(equipmentUnits).where(eq(equipmentUnits.id, id));
   });
+  return { label: unit.serialNumber };
 }
 
 // ─────────────────────────── ЗАЯВКИ ───────────────────────────
@@ -220,7 +226,7 @@ export async function deleteEquipmentUnit(id: number) {
  * иначе остатки разойдутся с журналом.
  */
 export async function deleteTicket(id: number) {
-  await mustExist(await db.select({ id: tickets.id }).from(tickets).where(eq(tickets.id, id)), "Заявка не найдена");
+  const was = await mustExist(await db.select({ id: tickets.id, number: tickets.number, title: tickets.title }).from(tickets).where(eq(tickets.id, id)), "Заявка не найдена");
   assertFree(
     "заявку",
     await blockersOf([
@@ -246,4 +252,5 @@ export async function deleteTicket(id: number) {
     await tx.delete(ticketStatusHistory).where(eq(ticketStatusHistory.ticketId, id));
     await tx.delete(tickets).where(eq(tickets.id, id));
   });
+  return { label: `${was.number} — ${was.title}` };
 }

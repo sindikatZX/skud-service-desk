@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useConfirm } from "@/components/dialog";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client-api";
 import { Card, Badge, inputCls, btnCls, btnSecondaryCls, btnDangerCls, Table, FormMessage } from "@/components/ui";
@@ -189,7 +190,7 @@ export function CatalogTree({ categories, items, units, manage, canImport, wareh
             {list.map((i) => (
                   <tr key={i.id} className={`${sel.has(i.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"} ${!i.isActive ? "opacity-50" : ""}`}>
                     {manage && <td className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={sel.has(i.id)} onChange={() => toggle(i.id)} /></td>}
-                    <td className="px-3 py-2"><div className="font-medium">{i.name}</div><div className="text-xs text-slate-500"><span className="font-mono">{i.code}</span> · {i.sku}{i.externalCode ? ` · 1С: ${i.externalCode}` : ""}{i.manufacturer ? ` · ${i.manufacturer}` : ""}</div></td>
+                    <td className="px-3 py-2"><div className="font-medium"><Link href={`/catalog/${i.id}`} className="text-indigo-700 hover:underline">{i.name}</Link></div><div className="text-xs text-slate-500"><span className="font-mono">{i.code}</span> · {i.sku}{i.externalCode ? ` · 1С: ${i.externalCode}` : ""}{i.manufacturer ? ` · ${i.manufacturer}` : ""}</div></td>
                     <td className="px-3 py-2 text-xs"><button className="text-left text-indigo-600 hover:underline" onClick={() => setFolder(i.categoryId)}>{catName(i.categoryId)}</button></td>
                     <td className="px-3 py-2">{i.isSerialized ? <Badge tone="indigo">серийный</Badge> : <Badge>кол-во, {i.unit}</Badge>}</td>
                     {showPrices && (

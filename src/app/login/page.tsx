@@ -13,7 +13,10 @@ export default async function LoginPage() {
   await seedIfEmpty().catch((e) => console.error("seed failed", e));
   const user = await getCurrentUser();
   if (user) redirect(user.scope === "client" ? "/tickets" : "/");
-  const showDemo = process.env.SHOW_DEMO_LOGINS !== "false";
+  // Демо-доступы помогают при знакомстве с системой, но на рабочей установке это
+  // готовая подсказка для входа: в production показываем только по явному разрешению
+  const showDemo =
+    process.env.SHOW_DEMO_LOGINS === "true" || (process.env.NODE_ENV !== "production" && process.env.SHOW_DEMO_LOGINS !== "false");
   const b = await getBranding();
   const bg = b.loginBgDataUrl ? { backgroundImage: `url(${b.loginBgDataUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined;
   return (

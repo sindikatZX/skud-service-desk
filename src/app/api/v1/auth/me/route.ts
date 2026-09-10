@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { ok, withAuth, parseBody, conflict, forbidden } from "@/lib/api";
-import { hashPassword, verifyPassword } from "@/lib/auth";
+import { hashPassword, verifyPassword, signToken, setSessionCookie } from "@/lib/auth";
 import { profileUpdateSchema } from "@/lib/validators";
 
 export const GET = withAuth(async (_req, { user }) => ok({ user, permissions: user.permissions }));
@@ -12,7 +12,7 @@ export const GET = withAuth(async (_req, { user }) => ok({ user, permissions: us
  * Роль, клиент и активность здесь не меняются — это делает администратор.
  * Смена логина и пароля требует подтверждения текущим паролем.
  */
-export const PATCH = withAuth(async (req, { user }) => {
+export const PATCH = withAuth(async (req, { user, audit }) => {
   const b = await parseBody(req, profileUpdateSchema);
   const [me] = await db.select().from(users).where(eq(users.id, user.id));
   if (!me) throw forbidden();
@@ -28,8 +28,19 @@ export const PATCH = withAuth(async (req, { user }) => {
   if (b.newPassword) {
     if (!(await verifyPassword(b.currentPassword ?? "", me.passwordHash))) throw forbidden("Неверный текущий пароль");
     set.passwordHash = await hashPassword(b.newPassword);
+    // Отметка обрывает прежние сессии: старый токен после смены пароля недействителен
+    set.passwordChangedAt = new Date();
   }
   if (Object.keys(set).length) await db.update(users).set(set).where(eq(users.id, user.id));
+  // Себе выдаём новый токен сразу, иначе смена пароля выкинула бы из системы
+  if (set.passwordChangedAt) await setSessionCookie(await signToken(user.id));
+  audit.set({
+    entity: "user",
+    entityId: user.id,
+    entityLabel: user.fullName,
+    summary: `Изменил свою учётную запись: ${[b.fullName !== undefined && "ФИО", b.phone !== undefined && "телефон", set.email && "логин", set.passwordHash && "пароль"].filter(Boolean).join(", ") || "без изменений"}`,
+    details: { логин: set.email ?? undefined, пароль: set.passwordHash ? "изменён" : undefined },
+  });
   const [fresh] = await db.select({ id: users.id, email: users.email, fullName: users.fullName, phone: users.phone }).from(users).where(eq(users.id, user.id));
   return ok(fresh);
 });

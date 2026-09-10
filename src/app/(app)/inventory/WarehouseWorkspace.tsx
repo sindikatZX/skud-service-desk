@@ -166,7 +166,7 @@ export function WarehouseWorkspace({ warehouses, initialWarehouseId, initialStoc
             {freeUnits.map((u) => (
                   <tr key={u.id} className={selUnits.has(u.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"} onClick={() => toggleUnit(u.id)}>
                     <td className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={selUnits.has(u.id)} onChange={() => toggleUnit(u.id)} onClick={(e) => e.stopPropagation()} /></td>
-                    <td className="px-3 py-2"><div className="font-medium">{u.name}</div><div className="text-xs text-slate-500">{u.sku} · {u.category}</div></td>
+                    <td className="px-3 py-2"><div className="font-medium"><Link href={`/catalog/${u.catalogItemId}`} className="text-indigo-700 hover:underline">{u.name}</Link></div><div className="text-xs text-slate-500">{u.sku} · {u.category}</div></td>
                     <td className="px-3 py-2"><Link href={`/inventory/units/${u.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-indigo-600">{u.serialNumber}</Link>{u.macAddress && <div className="font-mono text-[10px] text-slate-400">{u.macAddress}</div>}</td>
                     <td className="px-3 py-2 text-xs text-slate-500">{u.receiptNumber ? <>{u.receiptNumber}<div className="text-[10px]">{fmtDate(u.receiptDate, false)}</div></> : "—"}</td>
                   </tr>
@@ -174,7 +174,7 @@ export function WarehouseWorkspace({ warehouses, initialWarehouseId, initialStoc
                 {reservedUnits.map((u) => (
                   <tr key={u.id} className="bg-amber-50/40">
                     <td className="px-3 py-2" />
-                    <td className="px-3 py-2"><div className="font-medium">{u.name}</div><div className="text-xs text-slate-500">{u.sku}</div></td>
+                    <td className="px-3 py-2"><div className="font-medium"><Link href={`/catalog/${u.catalogItemId}`} className="text-indigo-700 hover:underline">{u.name}</Link></div><div className="text-xs text-slate-500">{u.sku}</div></td>
                     <td className="px-3 py-2"><Link href={`/inventory/units/${u.id}`} className="font-mono text-xs text-indigo-600">{u.serialNumber}</Link></td>
                     <td className="px-3 py-2 text-xs"><UnitStatusBadge status={u.status} /> {u.ticketId && <Link href={`/tickets/${u.ticketId}`} className="text-indigo-600">#{u.ticketId}</Link>}</td>
                   </tr>
@@ -198,7 +198,7 @@ export function WarehouseWorkspace({ warehouses, initialWarehouseId, initialStoc
             {balances.map((b) => (
                   <tr key={b.catalogItemId} className={selItems.has(b.catalogItemId) ? "bg-indigo-50/60" : "hover:bg-slate-50"}>
                     <td className="px-3 py-2"><input type="checkbox" className="h-4 w-4" checked={selItems.has(b.catalogItemId)} onChange={() => toggleItem(b.catalogItemId, b.quantity)} /></td>
-                    <td className="px-3 py-2"><div className="font-medium">{b.name}</div><div className="text-xs text-slate-500">{b.sku} · {b.category}</div></td>
+                    <td className="px-3 py-2"><div className="font-medium"><Link href={`/catalog/${b.catalogItemId}`} className="text-indigo-700 hover:underline">{b.name}</Link></div><div className="text-xs text-slate-500">{b.sku} · {b.category}</div></td>
                     <td className="px-3 py-2 whitespace-nowrap">{fmtQty(b.quantity)} {b.unit}</td>
                     <td className="px-3 py-2">{selItems.has(b.catalogItemId) && <input type="number" step="0.001" min="0.001" max={b.quantity} value={selItems.get(b.catalogItemId)} onChange={(e) => setSelItems((m) => new Map(m).set(b.catalogItemId, e.target.value))} className={`${inputCls} min-h-[2rem] w-24 py-1`} />}</td>
                   </tr>

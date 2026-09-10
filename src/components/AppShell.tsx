@@ -4,7 +4,7 @@ import type { ModuleId } from "@/lib/modules";
 import { navLabelsFrom, termsFor } from "@/lib/terms";
 import type { ReactNode } from "react";
 import type { SessionUser } from "@/lib/auth";
-import { can, canAnyWithRole } from "@/lib/rbac";
+import { can, canAnyWithRole, canWithRole } from "@/lib/rbac";
 import type { IconName } from "@/components/icons";
 import { Icon } from "@/components/icons";
 import { NavLinks, BottomNav, MobileHeader, LogoutButton } from "@/components/NavClient";
@@ -36,6 +36,7 @@ export function navFor(user: SessionUser, installation: Installation = DEFAULT_I
   if (can(user, "directories.manage")) items.push({ href: "/directories", label: "Справочники", icon: "settings", short: "Настройки" });
   if (on("reports") && canAnyWithRole(user, ["reports.view", "reports.inventory", "reports.stock", "reports.movements", "reports.works"]))
     items.push({ href: "/reports", label: "Отчёты", icon: "chart" });
+  if (canWithRole(user, "audit.view")) items.push({ href: "/audit", label: "Журнал действий", icon: "history", short: "Журнал" });
   if (canAnyWithRole(user, ["admin.backup", "admin.maintenance"])) items.push({ href: "/admin", label: "Администрирование", icon: "shield", short: "Админ" });
   items.push({ href: "/profile", label: "Моя учётная запись", icon: "user", short: "Профиль" });
 

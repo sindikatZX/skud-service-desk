@@ -20,7 +20,7 @@ import {
 } from "@/db/schema";
 import { and, eq, desc, sql, inArray, gte, lte, or, ilike, isNull } from "drizzle-orm";
 import { badRequest, conflict, notFound } from "@/lib/api";
-import { DOC_PREFIX } from "@/lib/labels";
+import { DOC_PREFIX, fmtQty } from "@/lib/labels";
 import { ensureWarehouses, getCentralWarehouse, locById, locOf, locTeam, locWarehouse, sameLoc, teamWarehouse, teamWarehouseOrNull, type Loc } from "@/lib/services/warehouses";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -511,6 +511,64 @@ export async function install(input: { ticketId: number; catalogItemId?: number;
   });
 }
 
+
+// ─────────────── ОПИСАНИЕ ОПЕРАЦИИ ДЛЯ ЖУРНАЛА ───────────────
+
+type OperationDigest = { entity: string; entityId: number | null; entityLabel: string | null; summary: string; details: Record<string, unknown> };
+
+/**
+ * Превращает результат складской операции в понятную запись журнала действий:
+ * что именно, сколько, откуда и куда. Названия и количества разворачиваем здесь,
+ * а не в UI: журнал должен оставаться читаемым и через год, даже если товар
+ * потом переименуют или удалят.
+ */
+export async function operationDigest(result: unknown, phrase: string): Promise<OperationDigest> {
+  const r = (result ?? {}) as Record<string, unknown>;
+  const doc = r.document as { id: number } | undefined;
+  if (doc?.id) return docDigest(doc.id, phrase);
+
+  // Резерв, снятие резерва, установка — возвращают строку движения
+  const t = r as { id?: number; catalogItemId?: number | null; unitId?: number | null; quantity?: string | null; ticketId?: number | null };
+  if (t.catalogItemId) {
+    const [item] = await db.select({ name: catalogItems.name, sku: catalogItems.sku, unit: catalogItems.unit }).from(catalogItems).where(eq(catalogItems.id, t.catalogItemId));
+    const [unit] = t.unitId ? await db.select({ serialNumber: equipmentUnits.serialNumber }).from(equipmentUnits).where(eq(equipmentUnits.id, t.unitId)) : [null];
+    const what = `«${item?.name ?? "позиция"}»${unit ? ` S/N ${unit.serialNumber}` : ""} — ${fmtQty(t.quantity)} ${item?.unit ?? "шт"}`;
+    return {
+      entity: "inventory",
+      entityId: t.ticketId ?? null,
+      entityLabel: item?.name ?? null,
+      summary: `${phrase}: ${what}${t.ticketId ? ` по заявке #${t.ticketId}` : ""}`,
+      details: { товар: item?.name, артикул: item?.sku, количество: fmtQty(t.quantity), серийныйНомер: unit?.serialNumber, заявка: t.ticketId ?? undefined },
+    };
+  }
+  return { entity: "inventory", entityId: null, entityLabel: null, summary: phrase, details: {} };
+}
+
+async function docDigest(docId: number, phrase: string): Promise<OperationDigest> {
+  const d = await getDocument(docId);
+  if (!d) return { entity: "inventory", entityId: docId, entityLabel: null, summary: phrase, details: {} };
+  const lines = d.lines.map(
+    (l) => `${l.name}${l.sku ? ` (${l.sku})` : ""} — ${fmtQty(l.quantity)} ${l.unit}${l.serialNumbers?.length ? ` [S/N: ${l.serialNumbers.join(", ")}]` : ""}`,
+  );
+  const route = [d.doc.fromWarehouseName && `со склада «${d.doc.fromWarehouseName}»`, d.doc.toWarehouseName && `на склад «${d.doc.toWarehouseName}»`].filter(Boolean).join(" ");
+  const short = lines.length === 1 ? lines[0] : `${lines.length} поз., всего ${fmtQty(d.doc.totalQuantity)}`;
+  return {
+    entity: "inventory",
+    entityId: d.doc.id,
+    entityLabel: d.doc.number,
+    summary: `${phrase}: ${short}${route ? ` ${route}` : ""} — документ ${d.doc.number}`,
+    details: {
+      документ: d.doc.number,
+      откуда: d.doc.fromWarehouseName ?? undefined,
+      куда: d.doc.toWarehouseName ?? undefined,
+      позиции: lines,
+      всего: fmtQty(d.doc.totalQuantity),
+      поставщик: d.doc.supplier ?? undefined,
+      примечание: d.doc.note ?? undefined,
+    },
+  };
+}
+
 // ─────────────── ЗАПРОСЫ ───────────────
 
 /**
@@ -597,6 +655,74 @@ export async function getStockAt(loc: Loc) {
     .where(and(eq(stockReservations.locationType, loc.type), eq(stockReservations.teamId, loc.teamId), eq(stockReservations.warehouseId, loc.warehouseId), eq(stockReservations.status, "active")));
 
   return { loc, balances, units, reservations };
+}
+
+/**
+ * Остатки одной позиции по всем местам хранения — для карточки товара.
+ *
+ * Собираем в одном месте то, что раньше приходилось искать по разным экранам:
+ * сколько лежит на каждом складе, сколько в машинах бригад и сколько из этого
+ * зарезервировано под заявки.
+ */
+export async function itemStockBreakdown(catalogItemId: number) {
+  await ensureWarehouses();
+  const whs = await db.select().from(warehouses).orderBy(warehouses.sortOrder, warehouses.name);
+  const teamNames = new Map((await db.select({ id: teams.id, name: teams.name }).from(teams)).map((t) => [t.id, t.name]));
+
+  const balances = await db
+    .select({ lt: stockBalances.locationType, teamId: stockBalances.teamId, whId: stockBalances.warehouseId, quantity: stockBalances.quantity })
+    .from(stockBalances)
+    .where(and(eq(stockBalances.catalogItemId, catalogItemId), sql`${stockBalances.quantity} <> 0`));
+
+  const reserved = await db
+    .select({ lt: stockReservations.locationType, teamId: stockReservations.teamId, whId: stockReservations.warehouseId, q: sql<string>`coalesce(sum(${stockReservations.quantity}),0)` })
+    .from(stockReservations)
+    .where(and(eq(stockReservations.catalogItemId, catalogItemId), eq(stockReservations.status, "active")))
+    .groupBy(stockReservations.locationType, stockReservations.teamId, stockReservations.warehouseId);
+
+  const units = await db
+    .select({
+      id: equipmentUnits.id,
+      serialNumber: equipmentUnits.serialNumber,
+      macAddress: equipmentUnits.macAddress,
+      status: equipmentUnits.status,
+      locationType: equipmentUnits.locationType,
+      warehouseId: equipmentUnits.warehouseId,
+      teamId: equipmentUnits.teamId,
+      siteId: equipmentUnits.siteId,
+      siteName: sites.name,
+      ticketId: equipmentUnits.ticketId,
+    })
+    .from(equipmentUnits)
+    .leftJoin(sites, eq(sites.id, equipmentUnits.siteId))
+    .where(eq(equipmentUnits.catalogItemId, catalogItemId))
+    .orderBy(equipmentUnits.status, equipmentUnits.serialNumber);
+
+  /** Название места хранения: склад из справочника или машина бригады. */
+  const placeName = (lt: string, whId: number | null, teamId: number | null) => {
+    if (lt === "team") return `Бригада «${teamNames.get(teamId ?? 0) ?? teamId}»`;
+    return whs.find((w) => w.id === whId)?.name ?? `Склад #${whId}`;
+  };
+
+  const places = balances.map((b) => ({
+    key: `${b.lt}:${b.whId ?? 0}:${b.teamId ?? 0}`,
+    name: placeName(b.lt, b.whId, b.teamId),
+    kind: b.lt as "warehouse" | "team",
+    warehouseId: b.whId,
+    teamId: b.teamId,
+    quantity: Number(b.quantity),
+    reserved: Number(reserved.find((r) => r.lt === b.lt && r.whId === b.whId && r.teamId === b.teamId)?.q ?? 0),
+  }));
+
+  return {
+    places: places.sort((a, b) => a.name.localeCompare(b.name, "ru")),
+    units: units.map((u) => ({
+      ...u,
+      place: u.status === "installed" ? (u.siteName ?? "Объект") : placeName(u.locationType === "team" ? "team" : "warehouse", u.warehouseId, u.teamId),
+    })),
+    totalQuantity: places.reduce((s, p) => s + p.quantity, 0),
+    totalReserved: places.reduce((s, p) => s + p.reserved, 0),
+  };
 }
 
 /** Сводка остатков по всем складам: позиций материалов и серийных единиц. */

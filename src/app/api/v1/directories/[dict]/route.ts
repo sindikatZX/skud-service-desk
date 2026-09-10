@@ -1,4 +1,5 @@
-import { ok, withAuth, parseBody, badRequest } from "@/lib/api";
+import { ok, withAuth, parseBody, badRequest, forbidden } from "@/lib/api";
+import { canAnyWithRole } from "@/lib/rbac";
 import type { ZodType } from "zod";
 import {
   listTicketTypes, createTicketType,
@@ -40,8 +41,20 @@ function handlerFor(dict: string): Handler {
   return h;
 }
 
-// Читать справочники может любой авторизованный пользователь: они нужны для форм.
-export const GET = withAuth(async (_req, { params }) => ok(await handlerFor(params.dict).list()));
+/**
+ * Чтение справочника.
+ *
+ * Справочники нужны формам, поэтому сотрудникам они доступны без отдельного права.
+ * Но два исключения: пользователю портала клиента внутренние списки (склады,
+ * бригады, роли) не нужны и видеть их он не должен, а список ролей раскрывает
+ * матрицу прав — его отдаём только тем, кто и так управляет ролями или людьми.
+ */
+export const GET = withAuth(async (_req, { user, params }) => {
+  if (user.scope === "client") throw forbidden("Справочники недоступны из портала клиента");
+  if (params.dict === "roles" && !canAnyWithRole(user, ["directories.manage", "users.manage"]))
+    throw forbidden("Список ролей доступен тем, кто управляет ролями или сотрудниками");
+  return ok(await handlerFor(params.dict).list());
+});
 
 export const POST = withAuth(async (req, { params }) => {
   const h = handlerFor(params.dict);
