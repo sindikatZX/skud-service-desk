@@ -12,7 +12,7 @@ const DEMO = [
   { email: "client@fsm.local", label: "Заказчик" },
 ];
 
-export function LoginForm({ showDemo }: { showDemo?: boolean }) {
+export function LoginForm({ showDemo, demoPassword = "password" }: { showDemo?: boolean; demoPassword?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,10 +55,10 @@ export function LoginForm({ showDemo }: { showDemo?: boolean }) {
 
       {showDemo && (
         <div className="mt-6 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
-          <div className="mb-2 font-semibold text-slate-600">Демо-доступы (пароль: <code>password</code>)</div>
+          <div className="mb-2 font-semibold text-slate-600">Демо-доступы (пароль: <code>{demoPassword}</code>) — нажмите роль, логин и пароль подставятся</div>
           <div className="flex flex-wrap gap-1.5">
             {DEMO.map((d) => (
-              <button key={d.email} type="button" onClick={() => { setEmail(d.email); setPassword("password"); setError(null); }} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 active:bg-indigo-50">
+              <button key={d.email} type="button" onClick={() => { setEmail(d.email); setPassword(demoPassword); setError(null); }} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 active:bg-indigo-50">
                 {d.label}
               </button>
             ))}

@@ -13,10 +13,12 @@ export default async function LoginPage() {
   await seedIfEmpty().catch((e) => console.error("seed failed", e));
   const user = await getCurrentUser();
   if (user) redirect(user.scope === "client" ? "/tickets" : "/");
-  // Демо-доступы помогают при знакомстве с системой, но на рабочей установке это
-  // готовая подсказка для входа: в production показываем только по явному разрешению
-  const showDemo =
-    process.env.SHOW_DEMO_LOGINS === "true" || (process.env.NODE_ENV !== "production" && process.env.SHOW_DEMO_LOGINS !== "false");
+  // Демо-доступы: кнопка подставляет логин и пароль. Пока система в разработке, они
+  // нужны каждый день, поэтому показываются по умолчанию. Перед боевым запуском
+  // выключаются одной переменной SHOW_DEMO_LOGINS=false (см. docs/15-security.md).
+  const showDemo = process.env.SHOW_DEMO_LOGINS !== "false";
+  // Пароль демо-учёток задаётся сидом: если его меняли, кнопка должна подставлять новый
+  const demoPassword = process.env.SEED_PASSWORD || "password";
   const b = await getBranding();
   const bg = b.loginBgDataUrl ? { backgroundImage: `url(${b.loginBgDataUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined;
   return (
@@ -28,7 +30,7 @@ export default async function LoginPage() {
             <div className="mt-3 text-2xl font-bold text-indigo-700">{b.appName}</div>
             <p className="mt-1 text-sm text-slate-500">{b.tagline || "Заявки · Монтаж · Обслуживание · Склад"}</p>
           </div>
-          <LoginForm showDemo={showDemo} />
+          <LoginForm showDemo={showDemo} demoPassword={demoPassword} />
         </div>
         <p className="mt-4 text-center text-[11px] text-indigo-200/80">Установите приложение на телефон — работает офлайн с последними данными</p>
       </div>
